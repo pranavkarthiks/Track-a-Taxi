@@ -1,0 +1,401 @@
+Potential Execution Pipeline
+
+## Core deliverables
+
+1. ~~Build hourly taxi demand dataset~~
+2. Merge hourly weather dataset
+3. Create time features and lagged features
+4. Train a baseline model
+5. Train one stronger ML model
+6. Compare:
+    - without weather
+    - with weather
+7. Evaluate and interpret results
+
+### What do we have currently:
+
+- Yellow Taxi pickup numbers grouped by hours, ideally like this:
+    
+    
+    | timestamp_hour | pickup_count |
+    | --- | --- |
+    | 2022-01-01 00:00 | 15432 |
+    | 2022-01-01 01:00 | 10320 |
+- Weather condition grouped by hour
+    
+    
+    | timestamp_hour | precipitation | temperature | wind_speed | visibility |
+    | --- | --- | --- | --- | --- |
+    | 2022-01-01 00:51 | 0.0 | 3.2 | 11.5 | 10.0 |
+    | 2022-01-01 01:51 | 0.0 | 0.0 | 0.0 | 0.0 |
+    
+    Current problems:
+    
+    - [ ]  The measurement of the station starts at 00:51 not 00:00, we need this time to be fully aligned to each other and merge the two datasets
+
+### Pipeline:
+
+## Step 2: Merge taxi and weather by hour
+
+Join the datasets on `timestamp_hour`.
+
+### If taxi is city-level hourly
+
+You merge directly:
+
+- one taxi row per hour
+- one weather row per hour
+
+### If taxi is zone-hour
+
+You still merge directly on time:
+
+- each zone-hour row gets the weather for that hour
+
+Because weather is shared across NYC at that timestamp.
+
+After merging, your table should look like:
+
+| timestamp_hour | pickup_count | precipitation | temperature | wind_speed | visibility |
+| --- | --- | --- | --- | --- | --- |
+
+or if zone-hour:
+
+| zone_id | timestamp_hour | pickup_count | precipitation | temperature | wind_speed | visibility |
+| --- | --- | --- | --- | --- | --- | --- |
+
+## Step 3: Create time-based features
+
+From `timestamp_hour`, create:
+
+- `hour`
+- `day_of_week`
+- `month`
+- `is_weekend`
+- optionally `is_rush_hour`
+
+Example:
+
+| timestamp_hour | hour | day_of_week | month | is_weekend |
+| --- | --- | --- | --- | --- |
+| 2022-01-01 13:00 | 13 | 5 | 1 | 1 |
+
+Recommended:
+
+- `hour`: 0–23
+- `day_of_week`: 0–6
+- `is_weekend`: 0 or 1
+
+These are essential.
+
+## Step 4: Create weather intensity features
+
+Do not rely only on raw precipitation. Create an interpretable weather category.
+
+For example:
+
+- `0` = no rain
+- `1` = light rain
+- `2` = moderate/heavy rain
+
+A simple version:
+
+- no rain: precipitation = 0
+- rain: precipitation > 0
+
+A slightly better version:
+
+- no rain
+- light rain
+- moderate+ rain
+
+This helps both interpretation and plots.
+
+You can keep both:
+
+- raw `precipitation`
+- categorical `rain_category`
+
+## Step 5: Create lagged features
+
+This is one of the most important parts.
+
+If predicting hourly demand, create columns like:
+
+- `lag_1` = pickup count 1 hour ago
+- `lag_2` = 2 hours ago
+- `lag_24` = same hour yesterday
+- `lag_168` = same hour last week
+- `rolling_mean_3` = mean of last 3 hours
+- `rolling_mean_24` = mean of last 24 hours
+
+### If city-level hourly demand
+
+Just shift the full series.
+
+### If zone-hour demand
+
+Create lags **within each zone**.
+
+After this, your table becomes:
+
+| timestamp_hour | pickup_count | precipitation | hour | weekday | lag_1 | lag_24 | rolling_mean_3 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+
+The first rows will have missing lag values. That is normal.
+
+## Step 6: Drop rows with missing lag values
+
+Because the first few hours cannot have `lag_24` or `lag_168`.
+
+Usually you:
+
+- remove rows with missing lag columns
+- keep only complete rows for modelling
+
+That is standard practice.
+
+## Step 7: Decide the target and features
+
+## Target
+
+Your target is:
+
+- `pickup_count`
+
+## Features
+
+Use a feature set like:
+
+### Time features
+
+- `hour`
+- `day_of_week`
+- `month`
+- `is_weekend`
+
+### Weather features
+
+- `precipitation`
+- `temperature`
+- `wind_speed`
+- `visibility`
+- `rain_category`
+
+### Lag features
+
+- `lag_1`
+- `lag_2`
+- `lag_24`
+- `rolling_mean_3`
+- `rolling_mean_24`
+
+If zone data exists:
+
+- `zone_id`
+
+## Step 8: Split the data chronologically
+
+Do not randomly split.
+
+Use time order.
+
+Example if you have one year:
+
+- Train: first 70%
+- Validation: next 15%
+- Test: final 15%
+
+Example:
+
+- Train: Jan–Sep
+- Validation: Oct–Nov
+- Test: Dec
+
+If you have multiple years:
+
+- Train: 2022–2024
+- Test: 2025
+
+This is very important.
+
+## Step 9: Build a simple baseline first
+
+Before fancy models, build a baseline.
+
+Good baseline options:
+
+### Baseline A: previous hour
+
+Predict:
+
+- next hour demand = `lag_1`
+
+Very simple, but surprisingly strong.
+
+### Baseline B: historical average by hour
+
+Predict:
+
+- average demand for that hour and weekday
+
+Example:
+
+- average of all Mondays at 8 AM
+
+This is also a good benchmark.
+
+You need a baseline so you can later say your ML model genuinely improved things.
+
+## Step 10: Train an interpretable model
+
+A good first trained model is:
+
+### Linear Regression
+
+Use:
+
+- time
+- weather
+- lagged features
+
+This is not always the best performer, but it is easy to interpret.
+
+If your course likes statistical models, this is useful.
+
+If your target is count data and your instructors care about that, try:
+
+### Poisson Regression
+
+This is more theoretically appropriate for counts.
+
+But if that feels too much, linear regression is still acceptable for coursework.
+
+## Step 11: Train your main ML model
+
+The best practical choice is:
+
+### XGBoost Regressor
+
+or
+
+### Random Forest Regressor
+
+For 3-week coursework, Random Forest is easier.
+
+XGBoost is stronger if you know it.
+
+This model can capture:
+
+- nonlinear weather effects
+- hour/weather interactions
+- complex patterns from lags
+
+## Step 12: Compare two feature setups
+
+This is the cleanest way to test your hypothesis.
+
+### Model A: without weather
+
+Features:
+
+- hour
+- day_of_week
+- month
+- is_weekend
+- lagged features
+
+### Model B: with weather
+
+Features:
+
+- all above
+- plus precipitation
+- temperature
+- wind
+- visibility
+- rain category
+
+Then compare performance.
+
+If Model B performs better, that supports the claim that weather adds predictive value.
+
+## Step 13: Evaluate on the test set
+
+Use:
+
+- **MAE**
+- **RMSE**
+
+These are the easiest to explain.
+
+Example:
+
+- Baseline RMSE = 210
+- No-weather model RMSE = 180
+- Weather model RMSE = 165
+
+That gives a strong story:
+
+- time + lag help
+- weather helps further
+
+## Step 14: Inspect feature importance
+
+For your ML model, examine which features mattered most.
+
+Typical important features will likely be:
+
+- `lag_1`
+- `lag_24`
+- `hour`
+- `day_of_week`
+- `precipitation`
+
+This helps you support the discussion section.
+
+## Step 15: Create key visuals for the report
+
+You do not need too many. Focus on useful ones.
+
+### Good plots
+
+- hourly average demand over the day
+- demand by weekday/weekend
+- demand under no-rain vs rain
+- actual vs predicted on the test set
+- feature importance plot
+
+If zone-level:
+
+- demand heatmap by zone and hour
+
+# Recommended report logic
+
+## 1. Define demand
+
+Demand = number of taxi pickups per hour.
+
+## 2. Merge weather
+
+Match hourly weather to hourly demand.
+
+## 3. Build temporal predictors
+
+Hour, weekday, weekend, month.
+
+## 4. Add historical memory
+
+Lagged demand and rolling averages.
+
+## 5. Compare models
+
+Without weather vs with weather.
+
+## 6. Interpret
+
+Does weather improve prediction?
+
+That is the cleanest narrative.
+
+[Full ChatGPT respond](https://www.notion.so/Full-ChatGPT-respond-3274bcf883b78096b523f8a7b07bd938?pvs=21)
