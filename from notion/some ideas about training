@@ -1,0 +1,17 @@
+# Some ideas about training
+
+For a better training result, Lag features are needed.
+
+Lagged features let the model use the **recent past** to predict the **near future**.
+
+For taxi demand, that matters because demand is not random from hour to hour. It has **momentum** and **temporal dependence**.
+
+Use the previous pickup numbers as separate columns for the current row:
+
+For zone-hour demand, good ones are:
+
+- `lag_1`: previous hour demand
+- `lag_2`: 2 hours ago
+- `lag_3`: 3 hours ago
+- `lag_24`: same hour yesterday
+- `lag_168`: same hour last week
