@@ -1,0 +1,66 @@
+Task Split
+
+Raw Taxi Data
+↓
+Data Cleaning
+↓
+Demand Aggregation (Data set aggregration)
+↓
+Feature Engineering
+↓
+Exploratory Data Analysis
+↓
+Model Training
+↓
+Model Evaluation
+↓
+Demand Forecasting
+↓
+Visualization & Report
+
+Potential splitting of datasets:
+From 2022- 2026
+- Train: 2022–2024
+- Validation: 2025
+- Test: 2026
+
+Pair 1 — NYC TLC Taxi Data
+
+everything taxi-side
+
+- Download all 12 monthly Parquet files
+- Filter invalid records (duration, speed, missing zones)
+- Engineer features: `trip_duration_min`, `speed_mph`, `hour`, `day_of_week`, `month`, `is_weekend`
+- **Group the data into hourly**
+- Produce EDA: trip volume over time, duration distributions, busiest zones
+- Output: `clean_trips_2023.parquet`
+
+Pair 2 — Weather + Spatial Data
+
+everything environmental and geographic
+
+- Download NOAA GHCND CSV for Central Park station (`USW00094728`)
+    - Problem: There are three weather stations in NYC, using Central Park only will lead to inaccuracies
+        - Potential Solution: using a **spatial join** (matching the taxi zone's coordinates to the nearest station)
+- Download NYC Taxi Zone shapefile
+- Clean and validate weather: flag rain days, snow days (>2 inches), temperature bands
+    - Clean process
+    
+    [Data cleaning history](https://www.notion.so/Data-cleaning-history-3244bcf883b780119cc4da5f9ac99922?pvs=21)
+    
+- Explore weather patterns across 2023 (seasonal trends, storm events)
+- Output: `weather_2023.csv` + `taxi_zones.geojson`
+
+Pair 3 — Modelling & Analysis Framework
+
+methodology and paper structure while waiting for data
+
+- Write the data merge pipeline (ready to run the moment Pairs 1 & 2 finish)
+- Set up the K-means clustering skeleton
+- Set up the Random Forest regression skeleton
+
+Latex
+
+- create structure
+- Draft the IEEE paper structure: abstract, intro, related work, methods
+- Research comparable studies to populate the literature review
