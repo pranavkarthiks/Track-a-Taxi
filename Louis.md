@@ -53,5 +53,7 @@ NYC Graph ML dataset [https://www.kaggle.com/datasets/crailtap/street-network-of
 <img width="3315" height="3360" alt="image" src="https://github.com/user-attachments/assets/a86c125e-8ce3-4229-9230-2907b3bc1fe4" />
 `taxi_zones_adjacency_matrix.csv` is the final adj matrix to be fed into the PDFormer model
 
+Disconnected nodes with zero edges (islands) were cleansed from the matrix. 
+
 
 
