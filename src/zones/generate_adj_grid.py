@@ -8,6 +8,8 @@ import pandas as pd
 from libpysal.weights import Queen
 from shapely.geometry import Point
 
+from src.utils.utils import reproject_lon_lat_points
+
 
 def is_bridge_or_tunnel(edge_data):
     bridge = str(edge_data.get("bridge", "")).strip().lower()
@@ -58,11 +60,11 @@ def add_bridge_tunnel_adjacency(adjacency, zones, graphml_path):
 
     # GraphML node coordinates are lon/lat, so reproject them into the taxi zone CRS
     # before checking whether each bridge/tunnel endpoint falls within a zone polygon.
-    endpoint_points = gpd.GeoDataFrame(
-        {"node_id": sorted(endpoint_ids)},
-        geometry=[node_points[node_id] for node_id in sorted(endpoint_ids)],
-        crs="EPSG:4326",
-    ).to_crs(zones.crs)
+    endpoint_points = reproject_lon_lat_points(
+        point_ids=sorted(endpoint_ids),
+        point_lookup=node_points,
+        target_crs=zones.crs,
+    )
 
     # Only keep endpoints that directly intersect a taxi zone polygon.
     joined = gpd.sjoin(
