@@ -51,6 +51,7 @@ This ignored bridges and tunnels, resulting in missing adjacencies.
 NYC Graph ML dataset [https://www.kaggle.com/datasets/crailtap/street-network-of-new-york-in-graphml/data] bridges and tunnels extracted, overlapping taxi zones correspond with added edges in the graph. 
 `visualise_adj_map` Visualises the graph and taxi zones for verification
 <img width="3315" height="3360" alt="image" src="https://github.com/user-attachments/assets/a86c125e-8ce3-4229-9230-2907b3bc1fe4" />
+`taxi_zones_adjacency_matrix.csv` is the final adj matrix to be fed into the PDFormer model
 
 
 
