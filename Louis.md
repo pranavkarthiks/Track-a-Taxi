@@ -45,7 +45,7 @@ Embeddings:
 ## Taxi Zone Graph
 For PDFormer, connections between taxi zones were required.
 `generate_adj_grid.py`
-First, take the taxi zone shapefile from NYCTLC. Connecitons calculated through spactially adjacent zones for an adjacency matrix.
+First, take the taxi zone shapefile from NYCTLC. Connections calculated through spactially adjacent zones for an adjacency matrix.
 This ignored bridges and tunnels, resulting in missing adjacencies.
 
 NYC Graph ML dataset [https://www.kaggle.com/datasets/crailtap/street-network-of-new-york-in-graphml/data] bridges and tunnels extracted, overlapping taxi zones correspond with added edges in the graph. 
