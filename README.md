@@ -9,13 +9,13 @@ A data science project investigating the **spatial propagation of game-day conge
 
 ## Research Question
 
-> How far from a major event venue (e.g. Madison Square Garden) does the game-day congestion effect propagate across Manhattan, and at what distance does the ~1.6% travel time impact reported in prior work become statistically negligible?
+> How far from a major event venue (e.g. Madison Square Garden) does the game-day congestion effect propagate across Manhattan, and at what distance does the ~1.3% travel time impact reported in prior work become statistically negligible?
 
 ---
 
 ## Project Overview
 
-Prior work (Jiang et al., 2024) found that NBA game days increase travel times by approximately **1.6%** city-wide — but this is an aggregate figure. It tells us nothing about *where* in the city the effect is concentrated, how fast it spreads, or how far it reaches.
+Prior work (Jiang et al., 2024) found that NBA game days increase travel times by approximately **1.3%** city-wide — but this is an aggregate figure. It tells us nothing about *where* in the city the effect is concentrated, how fast it spreads, or how far it reaches.
 
 This project spatially decomposes that effect using NYC taxi trip data as a congestion proxy (following Castro et al., 2012; Li et al., 2022):
 
@@ -100,7 +100,7 @@ Metrics: MAE, RMSE, MAPE.
 
 ## Novel Contributions
 
-1. **Spatial decomposition** of the game-day travel time effect — extending the 1.6% aggregate finding to a per-ring map
+1. **Spatial decomposition** of the game-day travel time effect — extending the 1.3% aggregate finding to a per-ring map
 2. **Propagation radius** — a quantified "impact horizon" around event venues
 3. **PDFormer with event features** — demonstrating that a propagation-aware model better captures the radiating congestion signal than non-spatial baselines
 
