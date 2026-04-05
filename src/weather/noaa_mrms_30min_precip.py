@@ -191,8 +191,15 @@ def load_zone_locations(path):
 
     zone_locations = frame.rename(columns={"LocationID": "zone_id"}).copy()
     zone_locations["zone_id"] = zone_locations["zone_id"].astype(int)
-    zone_locations["latitude"] = zone_locations["latitude"].astype(float)
-    zone_locations["longitude"] = zone_locations["longitude"].astype(float)
+    zone_locations["latitude"] = pd.to_numeric(zone_locations["latitude"], errors="coerce")
+    zone_locations["longitude"] = pd.to_numeric(zone_locations["longitude"], errors="coerce")
+    zone_locations = zone_locations.dropna(subset=["latitude", "longitude"]).copy()
+    zone_locations = zone_locations[
+        zone_locations["latitude"].between(-90, 90)
+        & zone_locations["longitude"].between(-180, 180)
+    ].copy()
+    if zone_locations.empty:
+        raise ValueError("No valid zone coordinates remained after filtering invalid rows.")
     return zone_locations
 
 
