@@ -55,5 +55,8 @@ NYC Graph ML dataset [https://www.kaggle.com/datasets/crailtap/street-network-of
 
 Disconnected nodes with zero edges (islands) were cleansed from the matrix. 
 
+---
 
+## Centre location calculations
+Not using centroids, but representative point - guarantees coordinate is always in the zone, not affected by weird zone shapes, so guaranteed to not be in the hudson river
 
