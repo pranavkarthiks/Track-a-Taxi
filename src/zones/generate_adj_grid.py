@@ -5,7 +5,7 @@ from pathlib import Path
 import geopandas as gpd
 import kagglehub
 import pandas as pd
-from libpysal.weights import Queen
+from libpysal.weights import Rook
 from shapely.geometry import Point
 
 from src.utils.utils import reproject_lon_lat_points
@@ -18,10 +18,33 @@ def is_bridge_or_tunnel(edge_data):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--zones", default="data/taxi_zones/taxi_zones.shp")
-parser.add_argument("--adjacency-out", default="data/taxi_zones_adjacency_matrix.csv")
+parser.add_argument("--zones", default="src/zones/data/taxi_zones/taxi_zones.shp")
+parser.add_argument("--adjacency-out", default="src/zones/data/taxi_zones_adjacency_matrix.csv")
 parser.add_argument("--graphml", default="")
+parser.add_argument("--include-islands", action="store_true")
 args = parser.parse_args()
+
+
+def resolve_graphml_path(graphml_arg):
+    if graphml_arg:
+        graphml_path = Path(graphml_arg).expanduser().resolve()
+        if not graphml_path.exists():
+            raise SystemExit(f"GraphML file not found: {graphml_path}")
+        return graphml_path
+
+    local_default = Path("src/zones/data/newyork.graphml").resolve()
+    if local_default.exists():
+        return local_default
+
+    try:
+        dataset_dir = Path(kagglehub.dataset_download("crailtap/street-network-of-new-york-in-graphml"))
+        return dataset_dir / "newyork.graphml"
+    except Exception as exc:
+        raise SystemExit(
+            "Could not fetch GraphML from Kaggle. Provide a local file with "
+            "`--graphml /path/to/newyork.graphml` or place it at `src/zones/data/newyork.graphml`.\n"
+            f"Original error: {exc}"
+        )
 
 
 def add_bridge_tunnel_adjacency(adjacency, zones, graphml_path):
@@ -88,9 +111,9 @@ def add_bridge_tunnel_adjacency(adjacency, zones, graphml_path):
                     adjacency.loc[target_zone, source_zone] = 1
 
 
-graphml_path = Path(args.graphml) if args.graphml else Path(kagglehub.dataset_download("crailtap/street-network-of-new-york-in-graphml")) / "newyork.graphml"
+graphml_path = resolve_graphml_path(args.graphml)
 zones = gpd.read_file(args.zones).sort_values("LocationID")
-weights = Queen.from_dataframe(zones, ids=zones["LocationID"].astype(int).tolist())
+weights = Rook.from_dataframe(zones, ids=zones["LocationID"].astype(int).tolist())
 matrix, ids = weights.full()
 adjacency = pd.DataFrame(matrix.astype(int), index=ids, columns=ids)
 
@@ -99,9 +122,10 @@ add_bridge_tunnel_adjacency(adjacency, zones, graphml_path)
 #  island/bridge corrections:
 # Islands: 202 -> 193, 46 -> 184.
 
-# Remove & disconnected islands (ie.  liberty island, Newark Airport, etc.)
-connected = adjacency.index[adjacency.sum(axis=1) > 0]
-adjacency = adjacency.loc[connected, connected]
+if not args.include_islands:
+    # Remove disconnected islands (ie. liberty island, Newark Airport, etc.)
+    connected = adjacency.index[adjacency.sum(axis=1) > 0]
+    adjacency = adjacency.loc[connected, connected]
 
 adjacency.index.name = "LocationID"
 adjacency.to_csv(args.adjacency_out)

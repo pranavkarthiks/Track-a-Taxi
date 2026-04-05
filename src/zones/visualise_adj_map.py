@@ -7,9 +7,10 @@ from matplotlib.collections import LineCollection
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--zones", default="data/taxi_zones/taxi_zones.shp")
-parser.add_argument("--adjacency", default="data/taxi_zones_adjacency_matrix.csv")
-parser.add_argument("--output", default="data/taxi_zones_adjacency_map.png")
+parser.add_argument("--zones", default="src/zones/data/taxi_zones/taxi_zones.shp")
+parser.add_argument("--adjacency", default="src/zones/data/taxi_zones_adjacency_matrix.csv")
+parser.add_argument("--output", default="src/zones/data/taxi_zones_adjacency_map.png")
+parser.add_argument("--include-islands", action="store_true")
 args = parser.parse_args()
 
 
@@ -18,8 +19,13 @@ adjacency = pd.read_csv(args.adjacency, index_col=0)
 adjacency.index = adjacency.index.astype(int)
 adjacency.columns = adjacency.columns.astype(int)
 
-zones = zones[zones["LocationID"].isin(adjacency.index)].copy()
-zones = zones.set_index("LocationID").loc[sorted(adjacency.index)].reset_index()
+if args.include_islands:
+    all_zone_ids = sorted(zones["LocationID"].astype(int).tolist())
+    adjacency = adjacency.reindex(index=all_zone_ids, columns=all_zone_ids, fill_value=0).astype(int)
+    zones = zones.set_index("LocationID").loc[all_zone_ids].reset_index()
+else:
+    zones = zones[zones["LocationID"].isin(adjacency.index)].copy()
+    zones = zones.set_index("LocationID").loc[sorted(adjacency.index)].reset_index()
 
 # Use representative points so the connection anchor stays inside each zone polygon.
 anchors = zones.set_index("LocationID").geometry.representative_point()
