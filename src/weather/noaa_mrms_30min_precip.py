@@ -43,8 +43,8 @@ def parse_args():
     parser.add_argument(
         "--output",
         help=(
-            "Output file path. Defaults to mrms_30min_precip.<ext> alongside "
-            "--locations-csv."
+            "Output file path. Defaults to mrms_30min_precip.<ext> in the weather "
+            "script directory."
         ),
     )
     parser.add_argument(
@@ -71,9 +71,9 @@ def default_locations_csv():
     )
 
 
-def default_output_path(locations_csv, fmt):
+def default_output_path(fmt):
     suffix = ".nc" if fmt == "netcdf" else ".csv"
-    return Path(locations_csv).expanduser().resolve().parent / f"mrms_30min_precip{suffix}"
+    return Path(__file__).resolve().parent / f"mrms_30min_precip{suffix}"
 
 
 def parse_utc(value):
@@ -276,7 +276,7 @@ def main():
     if args.output:
         output_path = Path(args.output)
     else:
-        output_path = default_output_path(args.locations_csv, args.format)
+        output_path = default_output_path(args.format)
 
     dataset = build_30min_dataset(args, start, end)
     write_output(dataset, output_path, args.format)

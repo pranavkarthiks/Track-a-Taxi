@@ -1,7 +1,7 @@
 `noaa_mrms_30min_precip.py` downloads official NOAA MRMS `RadarOnly_QPE_15M_00.00`
 files from `noaa-mrms-pds`, aggregates them into 30-minute precipitation totals,
 samples the taxi zone coordinate lookup, and by default writes NetCDF or CSV
-output into the same taxi-zones directory as that lookup file.
+output into `src/weather`.
 
 Dependencies:
 
