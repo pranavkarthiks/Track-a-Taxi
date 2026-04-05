@@ -18,3 +18,7 @@ Example:
     --locations-csv ./Track-a-Taxi/src/zones/data/taxi_zones/taxi_zone_lookup_coordinates.csv \
     --output /tmp/nyc_mrms_30min.nc \
     --format netcdf`
+
+
+### Data source:
+https://registry.opendata.aws/noaa-mrms-pds/

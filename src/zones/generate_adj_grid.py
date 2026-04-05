@@ -9,6 +9,7 @@ from libpysal.weights import Rook
 from shapely.geometry import Point
 
 from src.utils.utils import reproject_lon_lat_points
+from src.zones.zone_utils import load_zones
 
 
 def is_bridge_or_tunnel(edge_data):
@@ -112,7 +113,7 @@ def add_bridge_tunnel_adjacency(adjacency, zones, graphml_path):
 
 
 graphml_path = resolve_graphml_path(args.graphml)
-zones = gpd.read_file(args.zones).sort_values("LocationID")
+zones = load_zones(args.zones, include_islands=True)
 weights = Rook.from_dataframe(zones, ids=zones["LocationID"].astype(int).tolist())
 matrix, ids = weights.full()
 adjacency = pd.DataFrame(matrix.astype(int), index=ids, columns=ids)

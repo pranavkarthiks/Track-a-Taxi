@@ -8,6 +8,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--zones", default="src/zones/data/taxi_zones/taxi_zones.shp")
 parser.add_argument("--adjacency-out", default="src/zones/data/taxi_zones_adjacency_matrix.csv")
 parser.add_argument("--map-out", default="src/zones/data/taxi_zones_adjacency_map.png")
+parser.add_argument(
+    "--coordinates-out",
+    default="src/zones/data/taxi_zones/taxi_zone_lookup_coordinates.csv",
+)
+parser.add_argument(
+    "--coordinates-map-out",
+    default="src/zones/data/taxi_zones_centroids_map.png",
+)
 parser.add_argument("--graphml", default="")
 parser.add_argument("--include-islands", action="store_true")
 args = parser.parse_args()
@@ -33,6 +41,22 @@ if args.include_islands:
 
 try:
     subprocess.run(generate_command, check=True, cwd=repo_root)
+
+    coordinate_command = [
+        str(python),
+        "-m",
+        "src.zones.generate_zone_lookup_coordinates",
+        "--zones",
+        args.zones,
+        "--adjacency",
+        args.adjacency_out,
+        "--output",
+        args.coordinates_out,
+    ]
+    if args.include_islands:
+        coordinate_command.append("--include-islands")
+    subprocess.run(coordinate_command, check=True, cwd=repo_root)
+
     visualise_command = [
         str(python),
         "-m",
@@ -48,5 +72,23 @@ try:
         visualise_command.append("--include-islands")
 
     subprocess.run(visualise_command, check=True, cwd=repo_root)
+
+    coordinate_map_command = [
+        str(python),
+        "-m",
+        "src.zones.visualise_zone_lookup_coordinates",
+        "--zones",
+        args.zones,
+        "--adjacency",
+        args.adjacency_out,
+        "--coordinates",
+        args.coordinates_out,
+        "--output",
+        args.coordinates_map_out,
+    ]
+    if args.include_islands:
+        coordinate_map_command.append("--include-islands")
+
+    subprocess.run(coordinate_map_command, check=True, cwd=repo_root)
 except subprocess.CalledProcessError as exc:
     raise SystemExit(f"Zone pipeline failed while running: {' '.join(exc.cmd)}")

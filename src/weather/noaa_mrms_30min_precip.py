@@ -2,9 +2,11 @@ import argparse
 import csv
 from datetime import datetime, timedelta, timezone
 import gzip
+import http.client
 from pathlib import Path
 import shutil
 import tempfile
+import time
 import urllib.error
 import urllib.request
 
@@ -17,6 +19,8 @@ PRODUCT = "CONUS/RadarOnly_QPE_15M_00.00"
 FILE_TEMPLATE = (
     "{product}/{date}/MRMS_RadarOnly_QPE_15M_00.00_{date}-{time}.grib2.gz"
 )
+FETCH_RETRIES = 4
+FETCH_BACKOFF_SECONDS = 3
 
 
 def parse_args():
@@ -128,14 +132,27 @@ def fetch_grib2_file(key, workdir):
     url = f"{BASE_URL}/{key}"
     gz_path = workdir / Path(key).name
     grib2_path = gz_path.with_suffix("")
-    with urllib.request.urlopen(url, timeout=120) as response:
-        with gz_path.open("wb") as handle:
-            shutil.copyfileobj(response, handle)
+    for attempt in range(1, FETCH_RETRIES + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=120) as response:
+                with gz_path.open("wb") as handle:
+                    shutil.copyfileobj(response, handle)
 
-
-    with gzip.open(gz_path, "rb") as source:
-        with grib2_path.open("wb") as target:
-            shutil.copyfileobj(source, target)
+            with gzip.open(gz_path, "rb") as source:
+                with grib2_path.open("wb") as target:
+                    shutil.copyfileobj(source, target)
+            break
+        except (
+            TimeoutError,
+            ConnectionResetError,
+            http.client.RemoteDisconnected,
+            urllib.error.URLError,
+        ):
+            gz_path.unlink(missing_ok=True)
+            grib2_path.unlink(missing_ok=True)
+            if attempt == FETCH_RETRIES:
+                raise
+            time.sleep(FETCH_BACKOFF_SECONDS * attempt)
     return grib2_path
 
 
