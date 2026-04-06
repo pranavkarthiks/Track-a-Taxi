@@ -14,6 +14,10 @@ parser.add_argument(
     default="src/zones/data/taxi_zones_adjacency_matrix.csv",
 )
 parser.add_argument(
+    "--lookup",
+    default="src/zones/data/taxi_zones/taxi_zone_lookup.csv",
+)
+parser.add_argument(
     "--output",
     default="src/zones/data/taxi_zones/taxi_zone_lookup_coordinates.csv",
 )
@@ -31,17 +35,15 @@ zones = load_zones(
 points = zones.geometry.representative_point()
 points_wgs84 = gpd.GeoSeries(points, crs=zones.crs).to_crs(epsg=4326)
 
-output = zones[["LocationID", "borough", "zone"]].copy()
-output = output.rename(columns={"borough": "Borough", "zone": "Zone"})
-output["service_zone"] = ""
+lookup = pd.read_csv(args.lookup)
+lookup["LocationID"] = lookup["LocationID"].astype(int)
+lookup = lookup[
+    ["LocationID", "Borough", "Zone", "service_zone"]
+].drop_duplicates(subset=["LocationID"])
+
+output = zones[["LocationID"]].copy().merge(lookup, on="LocationID", how="left")
 output["latitude"] = points_wgs84.y
 output["longitude"] = points_wgs84.x
-
-source_lookup = Path(args.output).with_name("taxi_zone_lookup.csv")
-if source_lookup.exists():
-    lookup = pd.read_csv(source_lookup)
-    lookup = lookup[["LocationID", "service_zone"]].drop_duplicates(subset=["LocationID"])
-    output = output.drop(columns=["service_zone"]).merge(lookup, on="LocationID", how="left")
 
 output.to_csv(args.output, index=False)
 print(f"Wrote zone coordinate lookup to {args.output}")

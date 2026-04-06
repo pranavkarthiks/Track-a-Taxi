@@ -9,6 +9,10 @@ parser.add_argument("--zones", default="src/zones/data/taxi_zones/taxi_zones.shp
 parser.add_argument("--adjacency-out", default="src/zones/data/taxi_zones_adjacency_matrix.csv")
 parser.add_argument("--map-out", default="src/zones/data/taxi_zones_adjacency_map.png")
 parser.add_argument(
+    "--lookup",
+    default="src/zones/data/taxi_zones/taxi_zone_lookup.csv",
+)
+parser.add_argument(
     "--coordinates-out",
     default="src/zones/data/taxi_zones/taxi_zone_lookup_coordinates.csv",
 )
@@ -50,6 +54,8 @@ try:
         args.zones,
         "--adjacency",
         args.adjacency_out,
+        "--lookup",
+        args.lookup,
         "--output",
         args.coordinates_out,
     ]
