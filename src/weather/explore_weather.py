@@ -15,6 +15,11 @@ import seaborn as sns
 import xarray as xr
 
 
+def interval_label(summary: dict[str, object]) -> str:
+    interval = summary["global_attrs"].get("interval_minutes")
+    return f"{interval}-minute" if interval not in (None, "", "None") else "interval"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run exploratory data analysis on a weather NetCDF dataset."
@@ -289,7 +294,7 @@ def save_plots(summary: dict[str, object], output_dir: Path) -> list[str]:
     timeline_path = output_dir / "interval_totals.png"
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(per_time["time"], per_time["sum"], color="#2563eb", linewidth=1.5)
-    ax.set_title("Total Precipitation per 30-Minute Interval")
+    ax.set_title(f"Total Precipitation per {interval_label(summary).title()}")
     ax.set_xlabel("Time")
     ax.set_ylabel(f"{variable} total")
     fig.autofmt_xdate()
@@ -387,7 +392,7 @@ def save_plots(summary: dict[str, object], output_dir: Path) -> list[str]:
             missing_kwds={"color": "#efefef", "label": "No data"},
             ax=ax,
         )
-        ax.set_title("NYC Taxi Zones: Peak 30-Minute Precipitation")
+        ax.set_title(f"NYC Taxi Zones: Peak {interval_label(summary).title()} Precipitation")
         ax.set_axis_off()
         fig.tight_layout()
         fig.savefig(max_map_path, dpi=220, bbox_inches="tight")
@@ -422,7 +427,7 @@ def build_findings(summary: dict[str, object]) -> list[str]:
         f"({summary['wet_share']:.2%} wet observations)."
     )
     findings.append(
-        f"Maximum 30-minute precipitation is {summary['distribution']['max']:.4f}; "
+        f"Maximum {interval_label(summary)} precipitation is {summary['distribution']['max']:.4f}; "
         f"mean is {summary['distribution']['mean']:.4f}."
     )
 

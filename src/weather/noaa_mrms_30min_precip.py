@@ -15,18 +15,24 @@ import xarray as xr
 
 
 BASE_URL = "https://noaa-mrms-pds.s3.amazonaws.com"
-PRODUCT = "CONUS/RadarOnly_QPE_15M_00.00"
-FILE_TEMPLATE = (
+QPE_PRODUCT = "CONUS/RadarOnly_QPE_15M_00.00"
+QPE_FILE_TEMPLATE = (
     "{product}/{date}/MRMS_RadarOnly_QPE_15M_00.00_{date}-{time}.grib2.gz"
+)
+PRECIP_RATE_PRODUCT = "CONUS/PrecipRate_00.00"
+PRECIP_RATE_FILE_TEMPLATE = (
+    "{product}/{date}/MRMS_PrecipRate_00.00_{date}-{time}.grib2.gz"
 )
 FETCH_RETRIES = 4
 FETCH_BACKOFF_SECONDS = 3
+QPE_STEP_MINUTES = 15
+PRECIP_RATE_STEP_MINUTES = 2
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Download NOAA MRMS 15-minute precipitation, aggregate to 30-minute "
+            "Download NOAA MRMS 15-minute precipitation, aggregate to n-minute "
             "intervals, sample taxi zone coordinates, and save to NetCDF or CSV."
         )
     )
@@ -47,8 +53,8 @@ def parse_args():
     parser.add_argument(
         "--output",
         help=(
-            "Output file path. Defaults to mrms_30min_precip.<ext> in the weather "
-            "script directory."
+            "Output file path. Defaults to mrms_<interval>min_precip.<ext> in the "
+            "weather script directory."
         ),
     )
     parser.add_argument(
@@ -56,6 +62,15 @@ def parse_args():
         choices=("netcdf", "csv"),
         default="netcdf",
         help="Output format.",
+    )
+    parser.add_argument(
+        "--interval-minutes",
+        type=int,
+        default=30,
+        help=(
+            "Aggregation interval in minutes. Multiples of 15 use the 15-minute QPE "
+            "product; other intervals use the 2-minute PrecipRate product."
+        ),
     )
     parser.add_argument(
         "--keep-temp",
@@ -75,9 +90,9 @@ def default_locations_csv():
     )
 
 
-def default_output_path(fmt):
+def default_output_path(fmt, interval_minutes):
     suffix = ".nc" if fmt == "netcdf" else ".csv"
-    return Path(__file__).resolve().parent / f"mrms_30min_precip{suffix}"
+    return Path(__file__).resolve().parent / f"mrms_{interval_minutes}min_precip{suffix}"
 
 
 def parse_utc(value):
@@ -100,32 +115,93 @@ def validate_args(args):
     end = parse_utc(args.end)
     if start >= end:
         raise ValueError("--start must be earlier than --end.")
-    if start.minute not in (0, 30) or start.second != 0:
-        raise ValueError("--start must align to a 30-minute boundary.")
-    if end.minute not in (0, 30) or end.second != 0:
-        raise ValueError("--end must align to a 30-minute boundary.")
+    if args.interval_minutes <= 0:
+        raise ValueError("--interval-minutes must be positive.")
+    mode = source_mode(args.interval_minutes)
+    if mode == "precip_rate" and args.interval_minutes < QPE_STEP_MINUTES and args.interval_minutes % 5 != 0:
+        raise ValueError(
+            "--interval-minutes below 15 must be a multiple of 5 when using "
+            "the 2-minute PrecipRate source."
+        )
+    start_seconds = int(start.timestamp())
+    end_seconds = int(end.timestamp())
+    if mode == "qpe":
+        source_seconds = QPE_STEP_MINUTES * 60
+        if start.second != 0 or start_seconds % source_seconds != 0:
+            raise ValueError(
+                f"--start must align to a {QPE_STEP_MINUTES}-minute boundary when "
+                "using the 15-minute QPE source."
+            )
+        if end.second != 0 or end_seconds % source_seconds != 0:
+            raise ValueError(
+                f"--end must align to a {QPE_STEP_MINUTES}-minute boundary when "
+                "using the 15-minute QPE source."
+            )
+    else:
+        if start.second != 0 or end.second != 0:
+            raise ValueError("--start and --end must be aligned to a whole minute.")
     if not Path(args.locations_csv).expanduser().exists():
         raise ValueError(f"--locations-csv not found: {args.locations_csv}")
     return start, end
 
 
-def expected_keys(start, end):
-    interval = timedelta(minutes=30)
-    quarter_hour = timedelta(minutes=15)
+def source_mode(interval_minutes):
+    return "qpe" if interval_minutes % QPE_STEP_MINUTES == 0 else "precip_rate"
+
+
+def expected_qpe_keys(start, end, interval_minutes):
+    interval = timedelta(minutes=interval_minutes)
+    quarter_hour = timedelta(minutes=QPE_STEP_MINUTES)
     current = start
     windows = []
     while current < end:
-        first = current
-        second = current + quarter_hour
-        windows.append((current, [build_key(first), build_key(second)]))
-        current += interval
+        window_end = min(current + interval, end)
+        window_keys = []
+        step = current
+        while step < window_end:
+            window_keys.append(build_key(step, "qpe"))
+            step += quarter_hour
+        windows.append((current, window_keys))
+        current = window_end
     return windows
 
 
-def build_key(timestamp):
+def floor_to_step(timestamp, step_minutes):
+    step_seconds = step_minutes * 60
+    floored = int(timestamp.timestamp()) // step_seconds * step_seconds
+    return datetime.fromtimestamp(floored, tz=timezone.utc)
+
+
+def expected_precip_rate_keys(start, end, interval_minutes):
+    interval = timedelta(minutes=interval_minutes)
+    rate_step = timedelta(minutes=PRECIP_RATE_STEP_MINUTES)
+    current = start
+    windows = []
+    while current < end:
+        window_end = min(current + interval, end)
+        source_time = floor_to_step(current, PRECIP_RATE_STEP_MINUTES)
+        segments = []
+        while source_time < window_end:
+            segment_start = max(current, source_time)
+            segment_end = min(window_end, source_time + rate_step)
+            if segment_end > segment_start:
+                segments.append((source_time, segment_end - segment_start))
+            source_time += rate_step
+        windows.append((current, segments))
+        current = window_end
+    return windows
+
+
+def build_key(timestamp, mode):
     date = timestamp.strftime("%Y%m%d")
     time = timestamp.strftime("%H%M%S")
-    return FILE_TEMPLATE.format(product=PRODUCT, date=date, time=time)
+    if mode == "qpe":
+        return QPE_FILE_TEMPLATE.format(product=QPE_PRODUCT, date=date, time=time)
+    return PRECIP_RATE_FILE_TEMPLATE.format(
+        product=PRECIP_RATE_PRODUCT,
+        date=date,
+        time=time,
+    )
 
 
 def fetch_grib2_file(key, workdir):
@@ -245,40 +321,86 @@ def select_zone_points(data_array, zone_locations):
     return selected
 
 
-def build_30min_dataset(args, start, end):
+def accumulation_from_rate(rate_array, duration):
+    duration_hours = duration.total_seconds() / 3600.0
+    units = str(rate_array.attrs.get("units", "")).strip().lower()
+    if units in {"", "none", "unknown"}:
+        units = "mm/hr"
+    if units in {"mm/h", "mm hr-1", "mm h-1", "mm/hr", "kg m-2 h-1", "kg m^-2 h^-1"}:
+        accumulation = rate_array * duration_hours
+    elif units in {"mm/s", "mm s-1", "mm sec-1", "kg m-2 s-1", "kg m^-2 s^-1"}:
+        accumulation = rate_array * duration.total_seconds()
+    else:
+        raise ValueError(
+            f"Unsupported PrecipRate units '{rate_array.attrs.get('units')}'."
+        )
+    accumulation.attrs = dict(rate_array.attrs)
+    accumulation.attrs["units"] = "mm"
+    return accumulation
+
+
+def build_dataset(args, start, end):
     zone_locations = load_zone_locations(args.locations_csv)
     outputs = []
-    with tempfile.TemporaryDirectory(prefix="mrms_30min_") as temp_dir:
+    mode = source_mode(args.interval_minutes)
+    with tempfile.TemporaryDirectory(prefix=f"mrms_{args.interval_minutes}min_") as temp_dir:
         workdir = Path(temp_dir)
-        for window_start, keys in expected_keys(start, end):
+        cached_arrays = {}
+        if mode == "qpe":
+            windows = expected_qpe_keys(start, end, args.interval_minutes)
+        else:
+            windows = expected_precip_rate_keys(start, end, args.interval_minutes)
+
+        for window_start, window_inputs in windows:
             arrays = []
             temp_paths = []
-            for key in keys:
-                grib2_path = fetch_grib2_file(key, workdir)
-                temp_paths.append(grib2_path)
-                arrays.append(
-                    select_zone_points(
+            for item in window_inputs:
+                if mode == "qpe":
+                    key = build_key(item, mode)
+                    duration = None
+                else:
+                    source_time, duration = item
+                    key = build_key(source_time, mode)
+
+                if key not in cached_arrays:
+                    grib2_path = fetch_grib2_file(key, workdir)
+                    temp_paths.append(grib2_path)
+                    cached_arrays[key] = select_zone_points(
                         normalize_coords(open_precip_dataset(grib2_path)),
                         zone_locations,
                     )
+                source_array = cached_arrays[key]
+                arrays.append(
+                    source_array if duration is None else accumulation_from_rate(source_array, duration)
                 )
 
-            total = arrays[0] + arrays[1]
+            total = arrays[0]
+            for array in arrays[1:]:
+                total = total + array
             total = total.expand_dims(time=[window_start.replace(tzinfo=None)])
-            total.name = "precipitation_mm_30min"
-            total.attrs["long_name"] = "30-minute precipitation accumulation"
-            total.attrs["source_product"] = "NOAA MRMS RadarOnly_QPE_15M_00.00"
-            total.attrs["units"] = arrays[0].attrs.get("units", "mm")
+            total.name = "precipitation_mm"
+            total.attrs["long_name"] = (
+                f"{args.interval_minutes}-minute precipitation accumulation"
+            )
+            total.attrs["source_product"] = (
+                "NOAA MRMS RadarOnly_QPE_15M_00.00"
+                if mode == "qpe"
+                else "NOAA MRMS PrecipRate"
+            )
+            total.attrs["units"] = "mm"
             outputs.append(total)
 
             if args.keep_temp:
                 for path in temp_paths:
                     shutil.copy2(path, Path.cwd() / path.name)
 
-    dataset = xr.concat(outputs, dim="time").to_dataset(name="precipitation_mm_30min")
+    dataset = xr.concat(outputs, dim="time").to_dataset(name="precipitation_mm")
     dataset.attrs["source"] = "NOAA MRMS noaa-mrms-pds"
-    dataset.attrs["product"] = "CONUS/RadarOnly_QPE_15M_00.00"
-    dataset.attrs["interval_minutes"] = 30
+    dataset.attrs["product"] = (
+        QPE_PRODUCT if mode == "qpe" else PRECIP_RATE_PRODUCT
+    )
+    dataset.attrs["source_mode"] = mode
+    dataset.attrs["interval_minutes"] = args.interval_minutes
     return dataset
 
 
@@ -288,7 +410,8 @@ def write_output(dataset, output_path, fmt):
         dataset.to_netcdf(output_path)
         return
 
-    frame = dataset["precipitation_mm_30min"].to_dataframe().reset_index()
+    variable = next(iter(dataset.data_vars))
+    frame = dataset[variable].to_dataframe().reset_index()
     if "zone_id" in frame.columns:
         frame = frame.sort_values(["time", "zone_id"]).reset_index(drop=True)
     frame.to_csv(output_path, index=False)
@@ -300,9 +423,9 @@ def main():
     if args.output:
         output_path = Path(args.output)
     else:
-        output_path = default_output_path(args.format)
+        output_path = default_output_path(args.format, args.interval_minutes)
 
-    dataset = build_30min_dataset(args, start, end)
+    dataset = build_dataset(args, start, end)
     write_output(dataset, output_path, args.format)
     print(f"Wrote {args.format} output to {output_path}")
 

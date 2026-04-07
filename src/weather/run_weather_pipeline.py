@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
         default="netcdf",
         help="Primary extracted weather format.",
     )
+    parser.add_argument(
+        "--interval-minutes",
+        type=int,
+        default=30,
+        help="Aggregation interval in minutes passed to the extractor.",
+    )
     return parser.parse_args()
 
 
@@ -57,6 +63,8 @@ def main() -> None:
             args.start,
             "--end",
             args.end,
+            "--interval-minutes",
+            str(args.interval_minutes),
             "--output",
             str(extracted_path),
             "--format",

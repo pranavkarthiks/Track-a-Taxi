@@ -2,7 +2,7 @@
 
 Source dataset: `weather.nc`
 
-Reproduce with: `./.venv/bin/python explore_weather.py --input weather.nc --results-dir runs/pipeline_test/results --graphs-dir graphs`
+Reproduce with: `./.venv/bin/python explore_weather.py --input weather.nc --results-dir runs/20260407T104514Z/results --graphs-dir graphs`
 
 ## What This Includes
 
@@ -18,9 +18,9 @@ Reproduce with: `./.venv/bin/python explore_weather.py --input weather.nc --resu
 - Shape: `{'time': 2, 'zone_id': 259}`
 - Dimensions: `['time', 'zone_id']`
 - Observation key columns: `['time', 'zone_id']`
-- Variable: `precipitation_mm_30min` (`float32`)
-- Time coverage: `2026-03-29 00:00:00` to `2026-03-29 00:30:00`
-- Time deltas in minutes: `[30.0]`
+- Variable: `precipitation_mm` (`float32`)
+- Time coverage: `2026-01-01 00:00:00` to `2026-01-01 00:05:00`
+- Time deltas in minutes: `[5.0]`
 - Records: `518`
 - Duplicate keys: `0`
 - Missing values: `0`
@@ -33,12 +33,11 @@ Reproduce with: `./.venv/bin/python explore_weather.py --input weather.nc --resu
 ## Key Findings
 
 - The dataset contains 2 time steps and 259.
-- Coverage is 2026-03-29 00:00:00 through 2026-03-29 00:30:00 at [30.0] minute spacing.
+- Coverage is 2026-01-01 00:00:00 through 2026-01-01 00:05:00 at [5.0] minute spacing.
 - No missing values or duplicate observation keys were found.
 - 0 of 518 observations are non-zero (0.00% wet observations).
-- Maximum 30-minute precipitation is 0.0000; mean is 0.0000.
+- Maximum 5-minute precipitation is 0.0000; mean is 0.0000.
 - The wettest entity is zone 2 with total precipitation 0.0000 across 0 wet intervals.
-- The file metadata does not provide a reliable precipitation unit (`units=unknown`).
 
 ## Distribution Summary
 
@@ -56,21 +55,21 @@ Reproduce with: `./.venv/bin/python explore_weather.py --input weather.nc --resu
 
 | time | count | sum | mean | median | max | std | active_entities | pct_active_entities |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-03-29 00:00:00 | 259 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | 0.0 |
-| 2026-03-29 00:30:00 | 259 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | 0.0 |
+| 2026-01-01 00:00:00 | 259 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | 0.0 |
+| 2026-01-01 00:05:00 | 259 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | 0.0 |
 
 ## Daily Summary
 
 | date | daily_precipitation_total | daily_active_entity_count |
 | --- | --- | --- |
-| 2026-03-29 | 0.0 | 0 |
+| 2026-01-01 | 0.0 | 0 |
 
 ## Top Rain Intervals
 
 | time | count | total_precipitation | mean | median | max | std | active_entities | pct_active_entities |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-03-29 00:00:00 | 259 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | 0.0 |
-| 2026-03-29 00:30:00 | 259 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | 0.0 |
+| 2026-01-01 00:00:00 | 259 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | 0.0 |
+| 2026-01-01 00:05:00 | 259 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | 0.0 |
 
 ## Top Rainy Entities
 
@@ -115,5 +114,5 @@ These rows fall outside a typical NYC bounding box and should be treated as look
 
 ## Metadata Notes
 
-- Global attrs: `{'source': 'NOAA MRMS noaa-mrms-pds', 'product': 'CONUS/RadarOnly_QPE_15M_00.00', 'interval_minutes': '30'}`
-- Variable attrs: `{'GRIB_paramId': '0', 'GRIB_dataType': 'ra', 'GRIB_numberOfPoints': '24500000', 'GRIB_typeOfLevel': 'heightAboveSea', 'GRIB_stepUnits': '1', 'GRIB_stepType': 'instant', 'GRIB_gridType': 'regular_ll', 'GRIB_uvRelativeToGrid': '0', 'GRIB_NV': '0', 'GRIB_Nx': '7000', 'GRIB_Ny': '3500', 'GRIB_cfName': 'unknown', 'GRIB_cfVarName': 'unknown', 'GRIB_gridDefinitionDescription': 'Latitude/longitude', 'GRIB_iDirectionIncrementInDegrees': '0.01', 'GRIB_iScansNegatively': '0', 'GRIB_jDirectionIncrementInDegrees': '0.01', 'GRIB_jPointsAreConsecutive': '0', 'GRIB_jScansPositively': '0', 'GRIB_latitudeOfFirstGridPointInDegrees': '54.995', 'GRIB_latitudeOfLastGridPointInDegrees': '20.005001', 'GRIB_longitudeOfFirstGridPointInDegrees': '230.005', 'GRIB_longitudeOfLastGridPointInDegrees': '299.994998', 'GRIB_missingValue': '3.4028234663852886e+38', 'GRIB_name': 'unknown', 'GRIB_shortName': 'unknown', 'GRIB_units': 'unknown', 'long_name': '30-minute precipitation accumulation', 'units': 'unknown', 'standard_name': 'unknown', 'source_product': 'NOAA MRMS RadarOnly_QPE_15M_00.00'}`
+- Global attrs: `{'source': 'NOAA MRMS noaa-mrms-pds', 'product': 'CONUS/PrecipRate_00.00', 'source_mode': 'precip_rate', 'interval_minutes': '5'}`
+- Variable attrs: `{'GRIB_paramId': '0', 'GRIB_dataType': 'ra', 'GRIB_numberOfPoints': '24500000', 'GRIB_typeOfLevel': 'heightAboveSea', 'GRIB_stepUnits': '1', 'GRIB_stepType': 'instant', 'GRIB_gridType': 'regular_ll', 'GRIB_uvRelativeToGrid': '0', 'GRIB_NV': '0', 'GRIB_Nx': '7000', 'GRIB_Ny': '3500', 'GRIB_cfName': 'unknown', 'GRIB_cfVarName': 'unknown', 'GRIB_gridDefinitionDescription': 'Latitude/longitude', 'GRIB_iDirectionIncrementInDegrees': '0.01', 'GRIB_iScansNegatively': '0', 'GRIB_jDirectionIncrementInDegrees': '0.01', 'GRIB_jPointsAreConsecutive': '0', 'GRIB_jScansPositively': '0', 'GRIB_latitudeOfFirstGridPointInDegrees': '54.995', 'GRIB_latitudeOfLastGridPointInDegrees': '20.005001', 'GRIB_longitudeOfFirstGridPointInDegrees': '230.005', 'GRIB_longitudeOfLastGridPointInDegrees': '299.994998', 'GRIB_missingValue': '3.4028234663852886e+38', 'GRIB_name': 'unknown', 'GRIB_shortName': 'unknown', 'GRIB_units': 'unknown', 'long_name': '5-minute precipitation accumulation', 'units': 'mm', 'standard_name': 'unknown', 'source_product': 'NOAA MRMS PrecipRate'}`
