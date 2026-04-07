@@ -1,8 +1,7 @@
 # Data files — too large for GitHub
 *.parquet
 *.zip
-*.csv
-data/
+
 
 # Python
 __pycache__/
