@@ -3,6 +3,7 @@ import csv
 from datetime import datetime, timedelta, timezone
 import gzip
 import http.client
+import numpy as np
 from pathlib import Path
 import shutil
 import tempfile
@@ -27,6 +28,12 @@ FETCH_RETRIES = 4
 FETCH_BACKOFF_SECONDS = 3
 QPE_STEP_MINUTES = 15
 PRECIP_RATE_STEP_MINUTES = 2
+
+
+class MissingRemoteFileError(FileNotFoundError):
+    def __init__(self, key):
+        super().__init__(f"Remote NOAA MRMS object not found: {key}")
+        self.key = key
 
 
 def parse_args():
@@ -93,6 +100,10 @@ def default_locations_csv():
 def default_output_path(fmt, interval_minutes):
     suffix = ".nc" if fmt == "netcdf" else ".csv"
     return Path(__file__).resolve().parent / f"mrms_{interval_minutes}min_precip{suffix}"
+
+
+def failed_points_output_path(output_path):
+    return output_path.with_name(f"{output_path.stem}_failed_points.csv")
 
 
 def parse_utc(value):
@@ -218,6 +229,14 @@ def fetch_grib2_file(key, workdir):
                 with grib2_path.open("wb") as target:
                     shutil.copyfileobj(source, target)
             break
+        except urllib.error.HTTPError as exc:
+            gz_path.unlink(missing_ok=True)
+            grib2_path.unlink(missing_ok=True)
+            if exc.code == 404:
+                raise MissingRemoteFileError(key) from exc
+            if attempt == FETCH_RETRIES:
+                raise
+            time.sleep(FETCH_BACKOFF_SECONDS * attempt)
         except (
             TimeoutError,
             ConnectionResetError,
@@ -339,13 +358,43 @@ def accumulation_from_rate(rate_array, duration):
     return accumulation
 
 
+def empty_precipitation_dataset(zone_locations, interval_minutes, mode):
+    zone_ids = zone_locations["zone_id"].to_numpy()
+    dataset = xr.Dataset(
+        data_vars={
+            "precipitation_mm": xr.DataArray(
+                np.empty((0, len(zone_ids))),
+                dims=("time", "zone_id"),
+                coords={
+                    "time": [],
+                    "zone_id": zone_ids,
+                    "latitude": ("zone_id", zone_locations["latitude"].to_numpy()),
+                    "longitude": ("zone_id", zone_locations["longitude"].to_numpy()),
+                },
+            )
+        }
+    )
+    dataset["precipitation_mm"].attrs["long_name"] = (
+        f"{interval_minutes}-minute precipitation accumulation"
+    )
+    dataset["precipitation_mm"].attrs["source_product"] = (
+        "NOAA MRMS RadarOnly_QPE_15M_00.00"
+        if mode == "qpe"
+        else "NOAA MRMS PrecipRate"
+    )
+    dataset["precipitation_mm"].attrs["units"] = "mm"
+    return dataset
+
+
 def build_dataset(args, start, end):
     zone_locations = load_zone_locations(args.locations_csv)
     outputs = []
+    failed_windows = []
     mode = source_mode(args.interval_minutes)
     with tempfile.TemporaryDirectory(prefix=f"mrms_{args.interval_minutes}min_") as temp_dir:
         workdir = Path(temp_dir)
         cached_arrays = {}
+        missing_keys = set()
         if mode == "qpe":
             windows = expected_qpe_keys(start, end, args.interval_minutes)
         else:
@@ -354,6 +403,7 @@ def build_dataset(args, start, end):
         for window_start, window_inputs in windows:
             arrays = []
             temp_paths = []
+            missing_key = None
             for item in window_inputs:
                 if mode == "qpe":
                     key = build_key(item, mode)
@@ -362,8 +412,17 @@ def build_dataset(args, start, end):
                     source_time, duration = item
                     key = build_key(source_time, mode)
 
+                if key in missing_keys:
+                    missing_key = key
+                    break
+
                 if key not in cached_arrays:
-                    grib2_path = fetch_grib2_file(key, workdir)
+                    try:
+                        grib2_path = fetch_grib2_file(key, workdir)
+                    except MissingRemoteFileError:
+                        missing_keys.add(key)
+                        missing_key = key
+                        break
                     temp_paths.append(grib2_path)
                     cached_arrays[key] = select_zone_points(
                         normalize_coords(open_precip_dataset(grib2_path)),
@@ -373,6 +432,10 @@ def build_dataset(args, start, end):
                 arrays.append(
                     source_array if duration is None else accumulation_from_rate(source_array, duration)
                 )
+
+            if missing_key is not None:
+                failed_windows.append((window_start, missing_key))
+                continue
 
             total = arrays[0]
             for array in arrays[1:]:
@@ -394,14 +457,17 @@ def build_dataset(args, start, end):
                 for path in temp_paths:
                     shutil.copy2(path, Path.cwd() / path.name)
 
-    dataset = xr.concat(outputs, dim="time").to_dataset(name="precipitation_mm")
+    if outputs:
+        dataset = xr.concat(outputs, dim="time").to_dataset(name="precipitation_mm")
+    else:
+        dataset = empty_precipitation_dataset(zone_locations, args.interval_minutes, mode)
     dataset.attrs["source"] = "NOAA MRMS noaa-mrms-pds"
     dataset.attrs["product"] = (
         QPE_PRODUCT if mode == "qpe" else PRECIP_RATE_PRODUCT
     )
     dataset.attrs["source_mode"] = mode
     dataset.attrs["interval_minutes"] = args.interval_minutes
-    return dataset
+    return dataset, zone_locations, failed_windows
 
 
 def write_output(dataset, output_path, fmt):
@@ -417,6 +483,29 @@ def write_output(dataset, output_path, fmt):
     frame.to_csv(output_path, index=False)
 
 
+def write_failed_points(zone_locations, failed_windows, output_path):
+    failure_path = failed_points_output_path(output_path)
+    failure_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not failed_windows:
+        if failure_path.exists():
+            failure_path.unlink()
+        return None
+
+    frames = []
+    for window_start, missing_key in failed_windows:
+        frame = zone_locations[["zone_id"]].copy()
+        frame["key"] = missing_key
+        frame["datetime"] = window_start.replace(tzinfo=None)
+        frames.append(frame)
+
+    pd.concat(frames, ignore_index=True).sort_values(["datetime", "zone_id"]).to_csv(
+        failure_path,
+        index=False,
+    )
+    return failure_path
+
+
 def main():
     args = parse_args()
     start, end = validate_args(args)
@@ -425,9 +514,12 @@ def main():
     else:
         output_path = default_output_path(args.format, args.interval_minutes)
 
-    dataset = build_dataset(args, start, end)
+    dataset, zone_locations, failed_windows = build_dataset(args, start, end)
     write_output(dataset, output_path, args.format)
+    failure_path = write_failed_points(zone_locations, failed_windows, output_path)
     print(f"Wrote {args.format} output to {output_path}")
+    if failure_path is not None:
+        print(f"Wrote failed points log to {failure_path}")
 
 
 if __name__ == "__main__":
