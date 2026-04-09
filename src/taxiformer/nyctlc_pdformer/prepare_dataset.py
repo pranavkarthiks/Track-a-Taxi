@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument("--dataset", default="NYCTLC", help="Output dataset name.")
     parser.add_argument(
         "--pdformer-root",
-        default=str(Path(__file__).resolve().parents[1] / "PDFormer"),
+        default=str(Path(__file__).resolve().parent.parent / "PDFormer"),
         help="PDFormer root containing raw_data/ and dataset JSON configs.",
     )
     parser.add_argument("--time-col", default="time")

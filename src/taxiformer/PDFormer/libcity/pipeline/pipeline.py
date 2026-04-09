@@ -1,18 +1,34 @@
 import os
-from ray import tune
-from ray.tune.suggest.hyperopt import HyperOptSearch
-from ray.tune.suggest.bayesopt import BayesOptSearch
-from ray.tune.suggest.basic_variant import BasicVariantGenerator
-from ray.tune.schedulers import FIFOScheduler, ASHAScheduler, MedianStoppingRule
-from ray.tune.suggest import ConcurrencyLimiter
 import json
 import torch
 import random
 import numpy as np
 
+try:
+    from ray import tune
+    from ray.tune.suggest.hyperopt import HyperOptSearch
+    from ray.tune.suggest.bayesopt import BayesOptSearch
+    from ray.tune.suggest.basic_variant import BasicVariantGenerator
+    from ray.tune.schedulers import FIFOScheduler, ASHAScheduler, MedianStoppingRule
+    from ray.tune.suggest import ConcurrencyLimiter
+except ModuleNotFoundError:
+    tune = None
+    HyperOptSearch = None
+    BayesOptSearch = None
+    BasicVariantGenerator = None
+    FIFOScheduler = None
+    ASHAScheduler = None
+    MedianStoppingRule = None
+    ConcurrencyLimiter = None
+
 from libcity.config import ConfigParser
 from libcity.data import get_dataset
 from libcity.utils import get_executor, get_model, get_logger, ensure_dir
+
+
+def _require_ray():
+    if tune is None:
+        raise ModuleNotFoundError("ray is only required for hyperparameter tuning")
 
 
 def run_model(task=None, model_name=None, dataset_name=None, config_file=None,
@@ -52,6 +68,7 @@ def run_model(task=None, model_name=None, dataset_name=None, config_file=None,
 
 
 def parse_search_space(space_file):
+    _require_ray()
     search_space = {}
     if os.path.exists('./{}.json'.format(space_file)):
         with open('./{}.json'.format(space_file), 'r') as f:
@@ -103,6 +120,7 @@ def parse_search_space(space_file):
 def hyper_parameter(task=None, model_name=None, dataset_name=None, config_file=None, space_file=None,
                     scheduler=None, search_alg=None, other_args=None, num_samples=5, max_concurrent=1,
                     cpu_per_trial=1, gpu_per_trial=1):
+    _require_ray()
     experiment_config = ConfigParser(task, model_name, dataset_name, config_file=config_file,
                                      other_args=other_args)
     logger = get_logger(experiment_config)
