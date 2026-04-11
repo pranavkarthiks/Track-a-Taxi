@@ -4,7 +4,7 @@ Temporal:
 - Bar chart, hours
 - Bar chart, days
 - hours + days heatmap
-
+- demand line graph each day for demand for each zone.
  Spatial:
   - chloropleth zones (4/6 times)
   - Journey chloropleth map for each zone (total)
