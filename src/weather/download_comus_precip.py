@@ -238,6 +238,8 @@ def fetch_grib2_file(key, workdir):
                 raise
             time.sleep(FETCH_BACKOFF_SECONDS * attempt)
         except (
+            EOFError,
+            OSError,
             TimeoutError,
             ConnectionResetError,
             http.client.RemoteDisconnected,
@@ -257,10 +259,36 @@ def open_precip_dataset(grib2_path):
         engine="cfgrib",
         backend_kwargs={"indexpath": ""},
     )
-    variable_name = next(iter(dataset.data_vars))
+    variable_name = next(iter(dataset.data_vars), None)
+    if variable_name is None:
+        dataset.close()
+        raise ValueError(f"No data variables found in GRIB2 file: {grib2_path}")
     data_array = dataset[variable_name].load()
     dataset.close()
     return data_array
+
+
+def load_cached_or_fetch_array(key, workdir, zone_locations, cached_arrays):
+    if key in cached_arrays:
+        return cached_arrays[key], None
+
+    gz_path = workdir / Path(key).name
+    grib2_path = gz_path.with_suffix("")
+    for attempt in range(1, FETCH_RETRIES + 1):
+        grib2_path = fetch_grib2_file(key, workdir)
+        try:
+            selected = select_zone_points(
+                normalize_coords(open_precip_dataset(grib2_path)),
+                zone_locations,
+            )
+            cached_arrays[key] = selected
+            return selected, grib2_path
+        except (EOFError, OSError, ValueError):
+            gz_path.unlink(missing_ok=True)
+            grib2_path.unlink(missing_ok=True)
+            if attempt == FETCH_RETRIES:
+                raise
+            time.sleep(FETCH_BACKOFF_SECONDS * attempt)
 
 
 def normalize_coords(data_array):
@@ -416,19 +444,20 @@ def build_dataset(args, start, end):
                     missing_key = key
                     break
 
-                if key not in cached_arrays:
-                    try:
-                        grib2_path = fetch_grib2_file(key, workdir)
-                    except MissingRemoteFileError:
-                        missing_keys.add(key)
-                        missing_key = key
-                        break
-                    temp_paths.append(grib2_path)
-                    cached_arrays[key] = select_zone_points(
-                        normalize_coords(open_precip_dataset(grib2_path)),
-                        zone_locations,
+                try:
+                    source_array, grib2_path = load_cached_or_fetch_array(
+                        key, workdir, zone_locations, cached_arrays
                     )
-                source_array = cached_arrays[key]
+                except MissingRemoteFileError:
+                    missing_keys.add(key)
+                    missing_key = key
+                    break
+                except (EOFError, OSError, ValueError):
+                    missing_keys.add(key)
+                    missing_key = key
+                    break
+                if grib2_path is not None:
+                    temp_paths.append(grib2_path)
                 arrays.append(
                     source_array if duration is None else accumulation_from_rate(source_array, duration)
                 )
@@ -510,7 +539,7 @@ def main():
     args = parse_args()
     start, end = validate_args(args)
     if args.output:
-        output_path = Path(args.output)
+        output_path = Path(args.output).expanduser()
     else:
         output_path = default_output_path(args.format, args.interval_minutes)
 

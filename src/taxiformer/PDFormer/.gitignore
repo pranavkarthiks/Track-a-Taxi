@@ -1,6 +1,5 @@
 /.vscode
 /visualized_data/*
-/libcity/tmp/*
 /libcity/__pycache__
 /libcity/*/__pycache__
 /libcity/data/dataset/__pycache__
