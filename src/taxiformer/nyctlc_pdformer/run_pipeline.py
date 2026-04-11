@@ -1,8 +1,14 @@
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+
+HF_DATASET_REPO = "xshah-123/taxi_x_pdformer_folder"
+HF_EXPORT_DIR = "pdformer_export 2"
+HF_SOURCE_DATASET = "NYCTaxi_sample"
 
 
 def parse_args():
@@ -25,6 +31,45 @@ def parse_args():
     parser.add_argument("--input-window", type=int, default=6)
     parser.add_argument("--output-window", type=int, default=1)
     return parser.parse_args()
+
+
+def required_dataset_files(pdformer_root, dataset):
+    dataset_dir = pdformer_root / "raw_data" / dataset
+    return [
+        dataset_dir / f"{dataset}.dyna",
+    ]
+
+
+def ensure_dataset_from_huggingface(pdformer_root, dataset):
+    missing_files = [path for path in required_dataset_files(pdformer_root, dataset) if not path.exists()]
+    if not missing_files:
+        return
+
+    from huggingface_hub import snapshot_download
+
+    snapshot_dir = Path(
+        snapshot_download(
+            repo_id=HF_DATASET_REPO,
+            repo_type="dataset",
+            allow_patterns=[
+                f"{HF_EXPORT_DIR}/raw_data/{HF_SOURCE_DATASET}/*",
+                f"{HF_EXPORT_DIR}/{dataset}.json",
+            ],
+        )
+    )
+
+    source_dir = snapshot_dir / HF_EXPORT_DIR / "raw_data" / HF_SOURCE_DATASET
+    destination_dir = pdformer_root / "raw_data" / dataset
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_dir / f"{HF_SOURCE_DATASET}.dyna", destination_dir / f"{dataset}.dyna")
+
+    missing_files = [path for path in required_dataset_files(pdformer_root, dataset) if not path.exists()]
+    if missing_files:
+        missing_list = "\n".join(str(path) for path in missing_files)
+        raise FileNotFoundError(
+            f"Failed to assemble the prepared {dataset} dataset from Hugging Face repo {HF_DATASET_REPO}.\n"
+            f"Missing files after download:\n{missing_list}"
+        )
 
 
 def main():
@@ -91,6 +136,16 @@ def main():
             str(args.output_window),
         ]
         subprocess.run(prepare_cmd, check=True, cwd=taxiformer_root)
+    else:
+        ensure_dataset_from_huggingface(pdformer_root, args.dataset)
+        missing_files = [path for path in required_dataset_files(pdformer_root, args.dataset) if not path.exists()]
+        if missing_files:
+            missing_list = "\n".join(str(path) for path in missing_files)
+            raise FileNotFoundError(
+                "No input timeseries was provided and the prepared PDFormer dataset is incomplete.\n"
+                f"Missing files:\n{missing_list}\n"
+                "Pass --timeseries and --adjacency, or generate the dataset files first."
+            )
 
     if not args.run:
         print(
