@@ -17,5 +17,6 @@
   "type_ln": "pre",
   "set_loss": "huber",
   "huber_delta": 2,
+  "mask_val": 1,
   "mode": "average"
 }
