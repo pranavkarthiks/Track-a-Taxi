@@ -23,6 +23,8 @@ def parse_args():
         default=str(Path(__file__).resolve().parent.parent / "PDFormer"),
     )
     parser.add_argument("--run", action="store_true", help="Run PDFormer after preparing files.")
+    parser.add_argument("--eval-only", action="store_true", help="Evaluate a trained model without retraining.")
+    parser.add_argument("--exp-id", type=str, default=None, help="Experiment ID for eval-only (default: latest).")
     parser.add_argument("--time-col", default="time")
     parser.add_argument("--zone-col", default="LocationID")
     parser.add_argument("--inflow-col", default="inflow")
@@ -171,6 +173,18 @@ def main():
         "--config_file",
         args.dataset,
     ]
+    if args.eval_only:
+        run_cmd += ["--train", "false"]
+        exp_id = args.exp_id
+        if exp_id is None:
+            cache_dir = pdformer_root / "libcity" / "cache"
+            if cache_dir.exists():
+                exp_dirs = sorted(cache_dir.iterdir(), key=lambda p: p.stat().st_mtime)
+                if exp_dirs:
+                    exp_id = exp_dirs[-1].name
+        if exp_id is None:
+            raise FileNotFoundError("No experiment found in cache. Pass --exp-id explicitly.")
+        run_cmd += ["--exp_id", exp_id]
     subprocess.run(run_cmd, check=True, cwd=pdformer_root, env=env)
 
 
