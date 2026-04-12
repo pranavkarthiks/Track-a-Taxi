@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from download_comus_precip import failed_points_output_path
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -58,7 +60,7 @@ def main() -> None:
     subprocess.run(
         [
             python,
-            "noaa_mrms_30min_precip.py",
+            "download_comus_precip.py",
             "--start",
             args.start,
             "--end",
@@ -72,6 +74,18 @@ def main() -> None:
         ],
         check=True,
     )
+
+    failure_path = failed_points_output_path(extracted_path)
+    if failure_path.exists():
+        subprocess.run(
+            [
+                python,
+                "repair_failed_weather_points.py",
+                "--input",
+                str(extracted_path),
+            ],
+            check=True,
+        )
 
     if args.format == "netcdf":
         subprocess.run(
