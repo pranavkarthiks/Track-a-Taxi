@@ -152,7 +152,7 @@ def main():
             "Run:\n"
             f"cd {pdformer_root}\n"
             f"PYTHONPATH={pdformer_root} {python} {taxiformer_root / 'run_model.py'} "
-            f"--task traffic_state_pred --model PDFormer --dataset {args.dataset} --config_file {args.dataset} --gpu false"
+            f"--task traffic_state_pred --model PDFormer --dataset {args.dataset} --config_file {args.dataset}"
         )
         return
 
@@ -170,8 +170,6 @@ def main():
         args.dataset,
         "--config_file",
         args.dataset,
-        "--gpu",
-        "false",
     ]
     subprocess.run(run_cmd, check=True, cwd=pdformer_root, env=env)
 
