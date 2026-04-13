@@ -1,5 +1,7 @@
 import argparse
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -30,7 +32,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--bidir", action="store_true", default=True)
     parser.add_argument("--no-bidir", dest="bidir", action="store_false")
-    parser.add_argument("--far-mask-delta", type=int, default=3)
+    parser.add_argument("--far-mask-delta", type=float, default=5.0)
     parser.add_argument("--geo-num-heads", type=int, default=2)
     parser.add_argument("--sem-num-heads", type=int, default=2)
     parser.add_argument("--t-num-heads", type=int, default=4)
@@ -40,6 +42,7 @@ def parse_args():
     parser.add_argument("--set-loss", default="huber")
     parser.add_argument("--huber-delta", type=int, default=2)
     parser.add_argument("--mode", default="average")
+    parser.add_argument("--no-dist-rel", action="store_true", help="Skip centroid distance and edge adjacency generation.")
     return parser.parse_args()
 
 
@@ -107,12 +110,12 @@ def build_raw_config(args) -> dict:
             "data_col": ["inflow", "outflow"],
             "data_files": [args.dataset],
             "geo_file": args.dataset,
-            "rel_file": args.dataset,
+            "rel_file": f"{args.dataset}_dist",
             "output_dim": 2,
             "time_intervals": args.freq_minutes * 60,
-            "init_weight_inf_or_zero": "zero",
-            "set_weight_link_or_dist": "link",
-            "calculate_weight_adj": False,
+            "init_weight_inf_or_zero": "inf",
+            "set_weight_link_or_dist": "dist",
+            "calculate_weight_adj": True,
             "weight_adj_epsilon": 0,
             "weight_col": "weight",
         }
@@ -136,6 +139,8 @@ def build_model_config(args) -> dict:
         "t_num_heads": args.t_num_heads,
         "cluster_method": args.cluster_method,
         "cand_key_days": args.cand_key_days,
+        "type_short_path": "centroid_dist",
+        "short_path_distance_file": f"{args.dataset}_full_dist.npy",
         "type_ln": args.type_ln,
         "set_loss": args.set_loss,
         "huber_delta": args.huber_delta,
@@ -146,6 +151,8 @@ def build_model_config(args) -> dict:
 def main():
     args = parse_args()
     pdformer_root = Path(args.pdformer_root).resolve()
+    python = sys.executable
+    script_dir = Path(__file__).resolve().parent
     dataset_dir = pdformer_root / "raw_data" / args.dataset
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
@@ -167,6 +174,22 @@ def main():
     with open(pdformer_root / f"{args.dataset}.json", "w", encoding="utf-8") as f:
         json.dump(build_model_config(args), f, indent=2)
         f.write("\n")
+
+    if not args.no_dist_rel:
+        subprocess.run(
+            [
+                python,
+                str(pdformer_root / "generate_nyctlc_dist_rel.py"),
+                "--adjacency",
+                str(Path(args.adjacency).resolve()),
+                "--output-rel",
+                str(dataset_dir / f"{args.dataset}_dist.rel"),
+                "--output-full-dist",
+                str(dataset_dir / f"{args.dataset}_full_dist.npy"),
+            ],
+            check=True,
+            cwd=script_dir.parent,
+        )
 
     print(f"Wrote dataset files to {dataset_dir}")
     print(f"Wrote model config to {pdformer_root / f'{args.dataset}.json'}")

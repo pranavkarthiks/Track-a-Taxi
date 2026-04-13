@@ -365,19 +365,19 @@ class PDFormer(AbstractTrafficStateModel):
             distances = sd_mx[~np.isinf(sd_mx)].flatten()
             std = distances.std()
             sd_mx = np.exp(-np.square(sd_mx / std))
-            self.far_mask = torch.zeros(self.num_nodes, self.num_nodes).to(self.device)
-            self.far_mask[sd_mx < self.far_mask_delta] = 1
-            self.far_mask = self.far_mask.bool()
+            self.geo_mask = torch.zeros(self.num_nodes, self.num_nodes).to(self.device)
+            self.geo_mask[sd_mx >= self.far_mask_delta] = 1
+            self.geo_mask = self.geo_mask.bool()
         else:
             sh_mx = sh_mx.T
             self.geo_mask = torch.zeros(self.num_nodes, self.num_nodes).to(self.device)
             self.geo_mask[sh_mx >= self.far_mask_delta] = 1
             self.geo_mask = self.geo_mask.bool()
-            self.sem_mask = torch.ones(self.num_nodes, self.num_nodes).to(self.device)
-            sem_mask = self.dtw_matrix.argsort(axis=1)[:, :self.dtw_delta]
-            for i in range(self.sem_mask.shape[0]):
-                self.sem_mask[i][sem_mask[i]] = 0
-            self.sem_mask = self.sem_mask.bool()
+        self.sem_mask = torch.ones(self.num_nodes, self.num_nodes).to(self.device)
+        sem_mask = self.dtw_matrix.argsort(axis=1)[:, :self.dtw_delta]
+        for i in range(self.sem_mask.shape[0]):
+            self.sem_mask[i][sem_mask[i]] = 0
+        self.sem_mask = self.sem_mask.bool()
 
         self.pattern_keys = torch.from_numpy(data_feature.get('pattern_keys')).float().to(self.device)
         self.pattern_embeddings = nn.ModuleList([

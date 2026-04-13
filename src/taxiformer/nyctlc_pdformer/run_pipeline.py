@@ -17,6 +17,8 @@ def parse_args():
     )
     parser.add_argument("--timeseries")
     parser.add_argument("--adjacency")
+    parser.add_argument("--weather-csv", default=None, help="Weather CSV with time, zone_id, precipitation_mm columns.")
+    parser.add_argument("--no-dist-rel", action="store_true", help="Skip centroid distance and edge adjacency generation.")
     parser.add_argument("--dataset", default="NYCTLC")
     parser.add_argument(
         "--pdformer-root",
@@ -137,8 +139,27 @@ def main():
             "--output-window",
             str(args.output_window),
         ]
+        if args.no_dist_rel:
+            prepare_cmd.append("--no-dist-rel")
         subprocess.run(prepare_cmd, check=True, cwd=taxiformer_root)
-    else:
+
+    if args.weather_csv:
+        weather_csv = Path(args.weather_csv).expanduser().resolve()
+        if not weather_csv.exists():
+            raise FileNotFoundError(f"Weather CSV not found: {weather_csv}")
+        merge_cmd = [
+            python,
+            str(script_dir / "merge_precip.py"),
+            "--weather-csv",
+            str(weather_csv),
+            "--dataset",
+            args.dataset,
+            "--pdformer-root",
+            str(pdformer_root),
+        ]
+        subprocess.run(merge_cmd, check=True, cwd=taxiformer_root)
+
+    if not args.timeseries:
         ensure_dataset_from_huggingface(pdformer_root, args.dataset)
         missing_files = [path for path in required_dataset_files(pdformer_root, args.dataset) if not path.exists()]
         if missing_files:

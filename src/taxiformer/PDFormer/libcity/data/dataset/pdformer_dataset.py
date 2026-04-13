@@ -11,6 +11,7 @@ class PDFormerDataset(TrafficStatePointDataset):
 
     def __init__(self, config):
         self.type_short_path = config.get('type_short_path', 'hop')
+        self.short_path_distance_file = config.get('short_path_distance_file', '')
         super().__init__(config)
         self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
                                             'pdformer_point_based_{}.npz'.format(self.parameters_str))
@@ -61,6 +62,17 @@ class PDFormerDataset(TrafficStatePointDataset):
                     for j in range(self.num_nodes):
                         self.sh_mx[i, j] = min(self.sh_mx[i, j], self.sh_mx[i, k] + self.sh_mx[k, j], 511)
             np.save('{}.npy'.format(self.dataset), self.sh_mx)
+        elif self.type_short_path == 'centroid_dist':
+            short_path_file = self.short_path_distance_file or f'{self.dataset}_full_dist.npy'
+            short_path_path = os.path.join(self.data_path, short_path_file)
+            self.sh_mx = np.load(short_path_path).astype(np.float32)
+            if self.sh_mx.shape != (self.num_nodes, self.num_nodes):
+                raise ValueError(
+                    'Short path distance matrix shape {} does not match num_nodes {}'.format(
+                        self.sh_mx.shape, self.num_nodes
+                    )
+                )
+            self._logger.info('Loaded centroid distance matrix from {}'.format(short_path_path))
 
     def _calculate_adjacency_matrix(self):
         self._logger.info("Start Calculate the weight by Gauss kernel!")
