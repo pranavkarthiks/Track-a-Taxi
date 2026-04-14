@@ -368,11 +368,17 @@ class PDFormer(AbstractTrafficStateModel):
             self.geo_mask = torch.zeros(self.num_nodes, self.num_nodes).to(self.device)
             self.geo_mask[sd_mx >= self.far_mask_delta] = 1
             self.geo_mask = self.geo_mask.bool()
-        else:
+        elif self.type_short_path == "hop":
             sh_mx = sh_mx.T
             self.geo_mask = torch.zeros(self.num_nodes, self.num_nodes).to(self.device)
             self.geo_mask[sh_mx >= self.far_mask_delta] = 1
             self.geo_mask = self.geo_mask.bool()
+        elif self.type_short_path == "centroid_dist":
+            self.geo_mask = torch.zeros(self.num_nodes, self.num_nodes).to(self.device)
+            self.geo_mask[sh_mx >= self.far_mask_delta] = 1
+            self.geo_mask = self.geo_mask.bool()
+        else:
+            raise ValueError("Unsupported type_short_path: {}".format(self.type_short_path))
         self.sem_mask = torch.ones(self.num_nodes, self.num_nodes).to(self.device)
         sem_mask = self.dtw_matrix.argsort(axis=1)[:, :self.dtw_delta]
         for i in range(self.sem_mask.shape[0]):

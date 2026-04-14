@@ -46,7 +46,8 @@ def run_model(task=None, model_name=None, dataset_name=None, config_file=None,
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
     logger = get_logger(config)
     logger.info('Begin pipeline, task={}, model_name={}, dataset_name={}, exp_id={}'.
                 format(str(task), str(model_name), str(dataset_name), str(exp_id)))
