@@ -78,7 +78,10 @@ class PDFormerDataset(TrafficStatePointDataset):
         self._logger.info("Start Calculate the weight by Gauss kernel!")
         self.sd_mx = self.adj_mx.copy()
         distances = self.adj_mx[~np.isinf(self.adj_mx)].flatten()
+        distances = distances[distances != 0]
         std = distances.std()
+        if std == 0:
+            std = distances.mean() if len(distances) > 0 else 1.0
         self.adj_mx = np.exp(-np.square(self.adj_mx / std))
         self.adj_mx[self.adj_mx < self.weight_adj_epsilon] = 0
         if self.type_short_path == 'dist':

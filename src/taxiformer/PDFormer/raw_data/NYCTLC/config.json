@@ -11,9 +11,9 @@
     "rel_file": "NYCTLC_dist",
     "output_dim": 2,
     "time_intervals": 300,
-    "init_weight_inf_or_zero": "inf",
-    "set_weight_link_or_dist": "dist",
-    "calculate_weight_adj": true,
+    "init_weight_inf_or_zero": "zero",
+    "set_weight_link_or_dist": "link",
+    "calculate_weight_adj": false,
     "weight_adj_epsilon": 0,
     "weight_col": "weight"
   }
