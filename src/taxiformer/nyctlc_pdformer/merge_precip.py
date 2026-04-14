@@ -47,6 +47,7 @@ def main():
     # ── Load .dyna ──
     dyna = pd.read_csv(dyna_path)
     dyna["time"] = pd.to_datetime(dyna["time"], utc=True)
+    dyna = dyna.drop(columns=["precipitation_mm"], errors="ignore")
 
     # ── Load weather ──
     weather = load_weather(Path(args.weather_csv))
