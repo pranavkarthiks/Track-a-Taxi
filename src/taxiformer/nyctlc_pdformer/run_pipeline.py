@@ -27,6 +27,11 @@ def parse_args():
     parser.add_argument("--run", action="store_true", help="Run PDFormer after preparing files.")
     parser.add_argument("--eval-only", action="store_true", help="Evaluate a trained model without retraining.")
     parser.add_argument("--exp-id", type=str, default=None, help="Experiment ID for eval-only (default: latest).")
+    parser.add_argument(
+        "--debug-cuda",
+        action="store_true",
+        help="Force synchronous CUDA errors and richer stack traces for debugging.",
+    )
     parser.add_argument("--time-col", default="time")
     parser.add_argument("--zone-col", default="LocationID")
     parser.add_argument("--inflow-col", default="inflow")
@@ -182,6 +187,9 @@ def main():
     env = dict(os.environ)
     existing_pythonpath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = f"{pdformer_root}:{existing_pythonpath}" if existing_pythonpath else str(pdformer_root)
+    if args.debug_cuda:
+        env["CUDA_LAUNCH_BLOCKING"] = "1"
+        env["TORCH_SHOW_CPP_STACKTRACES"] = "1"
     run_cmd = [
         python,
         str(taxiformer_root / "run_model.py"),

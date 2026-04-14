@@ -89,12 +89,30 @@ class DataEmbedding(nn.Module):
 
     def forward(self, x, lap_mx):
         origin_x = x
+        if not torch.isfinite(origin_x).all():
+            raise ValueError("Model input contains NaN or Inf values before embedding.")
         x = self.value_embedding(origin_x[:, :, :, :self.feature_dim])
         x += self.position_encoding(x)
         if self.add_time_in_day:
-            x += self.daytime_embedding((origin_x[:, :, :, self.feature_dim] * self.minute_size).round().long())
+            time_in_day = origin_x[:, :, :, self.feature_dim]
+            if ((time_in_day < 0) | (time_in_day > 1)).any().item():
+                bad_min = time_in_day.min().item()
+                bad_max = time_in_day.max().item()
+                raise ValueError(
+                    "time_in_day must be in [0, 1], got range [{}, {}].".format(bad_min, bad_max)
+                )
+            minute_index = (time_in_day * self.minute_size).long()
+            minute_index = minute_index.clamp_(0, self.minute_size - 1)
+            x += self.daytime_embedding(minute_index)
         if self.add_day_in_week:
-            x += self.weekday_embedding(origin_x[:, :, :, self.feature_dim + 1: self.feature_dim + 8].argmax(dim=3))
+            day_in_week = origin_x[:, :, :, self.feature_dim + 1: self.feature_dim + 8]
+            if day_in_week.shape[-1] != 7:
+                raise ValueError("Expected 7 day-of-week features, got {}.".format(day_in_week.shape[-1]))
+            if ((day_in_week < 0) | (day_in_week > 1)).any().item():
+                raise ValueError("day_in_week features must be in [0, 1].")
+            if not torch.allclose(day_in_week.sum(dim=3), torch.ones_like(day_in_week[..., 0])):
+                raise ValueError("day_in_week features must be one-hot encoded.")
+            x += self.weekday_embedding(day_in_week.argmax(dim=3))
         x += self.spatial_embedding(lap_mx)
         x = self.dropout(x)
         return x

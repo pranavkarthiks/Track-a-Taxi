@@ -148,6 +148,23 @@ def build_model_config(args) -> dict:
     }
 
 
+def clear_dataset_caches(pdformer_root: Path, dataset: str) -> None:
+    cache_dir = pdformer_root / "libcity" / "cache" / "dataset_cache"
+    if not cache_dir.exists():
+        return
+
+    patterns = [
+        f"traffic_state_{dataset}_*.npz",
+        f"point_based_{dataset}_*.npz",
+        f"pdformer_point_based_{dataset}_*.npz",
+        f"dtw_{dataset}.npy",
+        f"pattern_keys_*_{dataset}_*.npy",
+    ]
+    for pattern in patterns:
+        for path in cache_dir.glob(pattern):
+            path.unlink()
+
+
 def main():
     args = parse_args()
     pdformer_root = Path(args.pdformer_root).resolve()
@@ -174,6 +191,8 @@ def main():
     with open(pdformer_root / f"{args.dataset}.json", "w", encoding="utf-8") as f:
         json.dump(build_model_config(args), f, indent=2)
         f.write("\n")
+
+    clear_dataset_caches(pdformer_root, args.dataset)
 
     if not args.no_dist_rel:
         subprocess.run(
