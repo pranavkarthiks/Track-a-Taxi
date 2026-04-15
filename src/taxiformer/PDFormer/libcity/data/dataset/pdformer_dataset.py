@@ -12,6 +12,7 @@ class PDFormerDataset(TrafficStatePointDataset):
     def __init__(self, config):
         self.type_short_path = config.get('type_short_path', 'hop')
         self.short_path_distance_file = config.get('short_path_distance_file', '')
+        self.sd_mx = None
         super().__init__(config)
         self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
                                             'pdformer_point_based_{}.npz'.format(self.parameters_str))
@@ -48,7 +49,6 @@ class PDFormerDataset(TrafficStatePointDataset):
         return dtw_matrix
 
     def _load_rel(self):
-        self.sd_mx = None
         super()._load_rel()
         self._logger.info('Max adj_mx value = {}'.format(self.adj_mx.max()))
         self.sh_mx = self.adj_mx.copy()
