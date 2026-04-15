@@ -19,7 +19,8 @@ def parse_args():
     parser.add_argument("--adjacency")
     parser.add_argument("--weather-csv", default=None, help="Weather CSV with time, zone_id, precipitation_mm columns.")
     parser.add_argument("--no-dist-rel", action="store_true", help="Skip centroid distance and edge adjacency generation.")
-    parser.add_argument("--dataset", default="NYCTLC")
+    parser.add_argument("--dataset", required=True)
+    parser.add_argument("--config-file", default=None, help="PDFormer JSON config name (defaults to dataset name).")
     parser.add_argument(
         "--pdformer-root",
         default=str(Path(__file__).resolve().parent.parent / "PDFormer"),
@@ -180,7 +181,7 @@ def main():
             "Run:\n"
             f"cd {pdformer_root}\n"
             f"PYTHONPATH={pdformer_root} {python} {taxiformer_root / 'run_model.py'} "
-            f"--task traffic_state_pred --model PDFormer --dataset {args.dataset} --config_file {args.dataset}"
+            f"--task traffic_state_pred --model PDFormer --dataset {args.dataset}"
         )
         return
 
@@ -199,9 +200,11 @@ def main():
         "PDFormer",
         "--dataset",
         args.dataset,
-        "--config_file",
-        args.dataset,
     ]
+    if args.config_file:
+        run_cmd += ["--config_file", args.config_file]
+    if args.no_dist_rel:
+        run_cmd += ["--type_short_path", "hop"]
     if args.eval_only:
         run_cmd += ["--train", "false"]
         exp_id = args.exp_id
