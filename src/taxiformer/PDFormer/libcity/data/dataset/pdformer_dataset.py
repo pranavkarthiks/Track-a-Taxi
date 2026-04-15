@@ -15,6 +15,8 @@ class PDFormerDataset(TrafficStatePointDataset):
         self.sd_mx = None
         self.sh_mx = None
         super().__init__(config)
+        if self.sh_mx is None:
+            self.sh_mx = self.adj_mx.copy()
         self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
                                             'pdformer_point_based_{}.npz'.format(self.parameters_str))
         self.points_per_hour = 3600 // self.time_intervals
