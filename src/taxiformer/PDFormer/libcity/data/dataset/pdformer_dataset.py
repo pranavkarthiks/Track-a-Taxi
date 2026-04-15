@@ -13,6 +13,7 @@ class PDFormerDataset(TrafficStatePointDataset):
         self.type_short_path = config.get('type_short_path', 'hop')
         self.short_path_distance_file = config.get('short_path_distance_file', '')
         self.sd_mx = None
+        self.sh_mx = None
         super().__init__(config)
         self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
                                             'pdformer_point_based_{}.npz'.format(self.parameters_str))

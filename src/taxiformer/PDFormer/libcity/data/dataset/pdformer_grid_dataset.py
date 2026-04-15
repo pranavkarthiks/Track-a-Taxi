@@ -11,6 +11,8 @@ class PDFormerGridDataset(TrafficStateGridDataset):
 
     def __init__(self, config):
         self.type_short_path = config.get('type_short_path', 'dist')
+        self.sd_mx = None
+        self.sh_mx = None
         super().__init__(config)
         self.cache_file_name = os.path.join('./libcity/cache/dataset_cache/',
                                             'pdformer_grid_based_{}.npz'.format(self.parameters_str))
