@@ -183,6 +183,26 @@ class STSelfAttention(nn.Module):
 
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
+        self.ablate_head_groups = set()
+        self.ablate_heads = {"geo": set(), "sem": set(), "t": set()}
+
+    def set_head_ablation(self, groups=None, heads=None):
+        self.ablate_head_groups = set(groups or [])
+        self.ablate_heads = {"geo": set(), "sem": set(), "t": set()}
+        for group, indices in (heads or {}).items():
+            if group not in self.ablate_heads:
+                raise ValueError("Unknown attention head group: {}".format(group))
+            self.ablate_heads[group] = set(indices)
+
+    @staticmethod
+    def _zero_selected_heads(head_output, indices):
+        if not indices:
+            return head_output
+        head_output = head_output.clone()
+        valid_indices = [idx for idx in indices if 0 <= idx < head_output.shape[-2]]
+        if valid_indices:
+            head_output[..., valid_indices, :] = 0
+        return head_output
 
     def forward(self, x, x_patterns, pattern_keys, geo_mask=None, sem_mask=None):
         B, T, N, D = x.shape
@@ -195,7 +215,11 @@ class STSelfAttention(nn.Module):
         t_attn = (t_q @ t_k.transpose(-2, -1)) * self.scale
         t_attn = t_attn.softmax(dim=-1)
         t_attn = self.t_attn_drop(t_attn)
-        t_x = (t_attn @ t_v).transpose(2, 3).reshape(B, N, T, int(D * self.t_ratio)).transpose(1, 2)
+        t_head_x = (t_attn @ t_v).transpose(2, 3)
+        t_head_x = self._zero_selected_heads(t_head_x, self.ablate_heads["t"])
+        t_x = t_head_x.reshape(B, N, T, int(D * self.t_ratio)).transpose(1, 2)
+        if "t" in self.ablate_head_groups:
+            t_x = torch.zeros_like(t_x)
 
         geo_q = self.geo_q_conv(x.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
         geo_k = self.geo_k_conv(x.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
@@ -215,7 +239,11 @@ class STSelfAttention(nn.Module):
             geo_attn.masked_fill_(geo_mask, float('-inf'))
         geo_attn = geo_attn.softmax(dim=-1)
         geo_attn = self.geo_attn_drop(geo_attn)
-        geo_x = (geo_attn @ geo_v).transpose(2, 3).reshape(B, T, N, int(D * self.geo_ratio))
+        geo_head_x = (geo_attn @ geo_v).transpose(2, 3)
+        geo_head_x = self._zero_selected_heads(geo_head_x, self.ablate_heads["geo"])
+        geo_x = geo_head_x.reshape(B, T, N, int(D * self.geo_ratio))
+        if "geo" in self.ablate_head_groups:
+            geo_x = torch.zeros_like(geo_x)
 
         sem_q = self.sem_q_conv(x.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
         sem_k = self.sem_k_conv(x.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
@@ -228,7 +256,11 @@ class STSelfAttention(nn.Module):
             sem_attn.masked_fill_(sem_mask, float('-inf'))
         sem_attn = sem_attn.softmax(dim=-1)
         sem_attn = self.sem_attn_drop(sem_attn)
-        sem_x = (sem_attn @ sem_v).transpose(2, 3).reshape(B, T, N, int(D * self.sem_ratio))
+        sem_head_x = (sem_attn @ sem_v).transpose(2, 3)
+        sem_head_x = self._zero_selected_heads(sem_head_x, self.ablate_heads["sem"])
+        sem_x = sem_head_x.reshape(B, T, N, int(D * self.sem_ratio))
+        if "sem" in self.ablate_head_groups:
+            sem_x = torch.zeros_like(sem_x)
 
         x = self.proj(torch.cat([t_x, geo_x, sem_x], dim=-1))
         x = self.proj_drop(x)
