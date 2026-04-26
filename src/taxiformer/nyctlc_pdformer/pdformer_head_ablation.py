@@ -2,6 +2,7 @@ import argparse
 import csv
 import os
 import sys
+import ast
 from pathlib import Path
 
 
@@ -11,13 +12,46 @@ def parse_args():
     )
     parser.add_argument("--dataset", default="NYCTLC")
     parser.add_argument("--config-file", default=None, help="PDFormer config name without .json, e.g. NYCTLC.")
+    parser.add_argument("--log-file", default=None, help="Training log containing the exact LibCity config dict for this run.")
     parser.add_argument("--exp-id", required=True, help="Experiment id under PDFormer/libcity/cache.")
     parser.add_argument("--checkpoint", default=None, help="Optional checkpoint path. Defaults to model_cache/PDFormer_DATASET.m.")
     parser.add_argument("--split", choices=["val", "test"], default="test")
     parser.add_argument("--max-batches", type=int, default=None, help="Limit batches for faster diagnostics.")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--cpu", action="store_true")
+    parser.add_argument("--check-only", action="store_true", help="Verify config/checkpoint compatibility without loading data.")
     return parser.parse_args()
+
+
+def load_run_config(cache_dir):
+    config_path = cache_dir / "run_config.json"
+    if not config_path.exists():
+        return {}, None
+    import json
+
+    with open(config_path, "r", encoding="utf-8") as handle:
+        return json.load(handle), config_path
+
+
+def load_log_config(log_file):
+    if log_file is None:
+        return {}, None
+    log_path = Path(log_file)
+    if not log_path.exists():
+        raise FileNotFoundError(log_path)
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        marker = " - INFO - {"
+        if marker not in line:
+            continue
+        raw = "{" + line.split(marker, 1)[1]
+        raw = raw.replace("device(type='cuda', index=0)", "'cuda:0'")
+        cfg = ast.literal_eval(raw)
+        cfg.pop("device", None)
+        cfg.pop("exp_id", None)
+        cfg.pop("local_rank", None)
+        cfg.pop("distributed", None)
+        return cfg, log_path
+    raise ValueError("No LibCity config dict found in {}".format(log_path))
 
 
 def set_all_head_ablations(model, groups=None, heads=None):
@@ -27,6 +61,13 @@ def set_all_head_ablations(model, groups=None, heads=None):
 
 def load_checkpoint(executor, checkpoint_path):
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    model_state, optimizer_state = split_checkpoint(checkpoint, checkpoint_path)
+    executor.model.load_state_dict(model_state)
+    if optimizer_state is not None:
+        executor.optimizer.load_state_dict(optimizer_state)
+
+
+def split_checkpoint(checkpoint, checkpoint_path):
     if isinstance(checkpoint, tuple):
         model_state, optimizer_state = checkpoint
     elif isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
@@ -34,9 +75,37 @@ def load_checkpoint(executor, checkpoint_path):
         optimizer_state = checkpoint.get("optimizer_state_dict")
     else:
         raise ValueError("Unsupported checkpoint format: {}".format(checkpoint_path))
-    executor.model.load_state_dict(model_state)
-    if optimizer_state is not None:
-        executor.optimizer.load_state_dict(optimizer_state)
+    return model_state, optimizer_state
+
+
+def check_checkpoint_config(config, checkpoint_path):
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    state, _ = split_checkpoint(checkpoint, checkpoint_path)
+
+    embed_dim = config.get("embed_dim", 64)
+    geo_heads = config.get("geo_num_heads", 4)
+    sem_heads = config.get("sem_num_heads", 2)
+    t_heads = config.get("t_num_heads", 2)
+    total_heads = geo_heads + sem_heads + t_heads
+    if embed_dim % total_heads != 0:
+        raise ValueError("embed_dim {} is not divisible by total heads {}".format(embed_dim, total_heads))
+    head_dim = embed_dim // total_heads
+
+    expected_shapes = {
+        "encoder_blocks.0.st_attn.geo_q_conv.weight": (geo_heads * head_dim, embed_dim, 1, 1),
+        "encoder_blocks.0.st_attn.sem_q_conv.weight": (sem_heads * head_dim, embed_dim, 1, 1),
+        "encoder_blocks.0.st_attn.t_q_conv.weight": (t_heads * head_dim, embed_dim, 1, 1),
+        "end_conv1.weight": (config.get("output_window", 12), config.get("input_window", 12), 1, 1),
+    }
+    for key, expected in expected_shapes.items():
+        actual = tuple(state[key].shape)
+        if actual != expected:
+            raise ValueError("{} shape mismatch: checkpoint {} != config {}".format(key, actual, expected))
+
+    print("Checkpoint/config OK")
+    print("checkpoint={}".format(checkpoint_path))
+    print("input_window={} output_window={}".format(config.get("input_window"), config.get("output_window")))
+    print("heads geo={} sem={} temporal={} head_dim={}".format(geo_heads, sem_heads, t_heads, head_dim))
 
 
 def evaluate_variant(executor, dataloader, variant_name, max_batches=None):
@@ -139,9 +208,22 @@ def main():
     from libcity.data import get_dataset
     from libcity.utils import get_executor, get_model, get_logger
 
+    run_cache_dir = pdformer_root / "libcity" / "cache" / args.exp_id
+    run_config, run_config_path = load_log_config(args.log_file)
+    if run_config_path is None:
+        run_config, run_config_path = load_run_config(run_cache_dir)
+    if run_config_path is None and args.config_file is None:
+        raise FileNotFoundError(
+            "No log config or run_config.json found. Pass --log-file, --config-file, or add run_config.json at {}.".format(
+                run_cache_dir / "run_config.json"
+            )
+        )
     other_args = {"exp_id": args.exp_id}
+    other_args.update(run_config)
     if args.cpu or not torch.cuda.is_available():
         other_args["gpu"] = False
+    if run_config_path is not None:
+        print("Using config from {}".format(run_config_path))
     config = ConfigParser(
         "traffic_state_pred",
         "PDFormer",
@@ -154,18 +236,22 @@ def main():
     config["exp_id"] = args.exp_id
     get_logger(config)
 
+    checkpoint = args.checkpoint
+    if checkpoint is None:
+        checkpoint = run_cache_dir / "model_cache" / f"PDFormer_{args.dataset}.m"
+    checkpoint = Path(checkpoint)
+    if not checkpoint.exists():
+        raise FileNotFoundError(checkpoint)
+
+    if args.check_only:
+        check_checkpoint_config(config, checkpoint)
+        return
+
     dataset = get_dataset(config)
     _, val_data, test_data = dataset.get_data()
     data_feature = dataset.get_data_feature()
     model = get_model(config, data_feature)
     executor = get_executor(config, model)
-
-    checkpoint = args.checkpoint
-    if checkpoint is None:
-        checkpoint = pdformer_root / "libcity" / "cache" / args.exp_id / "model_cache" / f"PDFormer_{args.dataset}.m"
-    checkpoint = Path(checkpoint)
-    if not checkpoint.exists():
-        raise FileNotFoundError(checkpoint)
     load_checkpoint(executor, checkpoint)
 
     dataloader = val_data if args.split == "val" else test_data
