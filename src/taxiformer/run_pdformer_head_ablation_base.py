@@ -6,10 +6,10 @@ from pathlib import Path
 
 
 LOG_FILES = [
-    "log-job-mask-eval-3m.out",
-    "log-job-mask-eval-3m-dist.out",
-    "log-job-3m-base-cfg2.out",
-    "log-job-3m-dist-fix.out",
+    ("log-job-mask-eval-3m.out", "Bae-default-conf"),
+    ("log-job-mask-eval-3m-dist.out", "Dist-default-conf"),
+    ("log-job-3m-base-cfg2.out", None),
+    ("log-job-3m-dist-fix.out", None),
 ]
 
 
@@ -29,11 +29,11 @@ def require_completed_model_line(log_path: Path) -> None:
         raise SystemExit(1)
 
 
-def match_checkpoint(log_root: Path, exp_id: str, log_path: Path) -> Path:
+def match_checkpoint(log_root: Path, run_name: str, log_path: Path) -> Path:
     matches = []
     for checkpoint in sorted(log_root.rglob("model_cache/PDFormer_NYCTLC.m")):
         run_dir = checkpoint.parent.parent.name
-        if run_dir == exp_id:
+        if run_dir == run_name:
             matches.append(checkpoint.resolve())
 
     if len(matches) == 1:
@@ -41,12 +41,12 @@ def match_checkpoint(log_root: Path, exp_id: str, log_path: Path) -> Path:
 
     if not matches:
         print(
-            f"No real checkpoint under {log_root} matches exp_id={exp_id} from log: {log_path}",
+            f"No real checkpoint under {log_root} matches run {run_name} for log: {log_path}",
             file=sys.stderr,
         )
     else:
         print(
-            f"Multiple checkpoints under {log_root} match exp_id={exp_id} from log: {log_path}",
+            f"Multiple checkpoints under {log_root} match run {run_name} for log: {log_path}",
             file=sys.stderr,
         )
         for path in matches:
@@ -83,7 +83,7 @@ def main() -> None:
         raise SystemExit(1)
 
     log_root = Path.cwd().resolve()
-    missing_logs = [name for name in LOG_FILES if not (log_root / name).is_file()]
+    missing_logs = [name for name, _ in LOG_FILES if not (log_root / name).is_file()]
     if missing_logs:
         print(f"Missing required logs in root directory: {log_root}", file=sys.stderr)
         for name in missing_logs:
@@ -92,12 +92,13 @@ def main() -> None:
 
     print(f"Using root/log directory: {log_root}", flush=True)
 
-    for log_name in LOG_FILES:
+    for log_name, run_name in LOG_FILES:
         log_path = log_root / log_name
         exp_id = parse_exp_id(log_path)
         require_completed_model_line(log_path)
-        checkpoint = match_checkpoint(log_root, exp_id, log_path)
-        run_ablation(exp_id, log_path, checkpoint)
+        output_exp_id = run_name or exp_id
+        checkpoint = match_checkpoint(log_root, output_exp_id, log_path)
+        run_ablation(output_exp_id, log_path, checkpoint)
 
 
 if __name__ == "__main__":
