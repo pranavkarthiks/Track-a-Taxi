@@ -13,25 +13,6 @@ LOG_FILES = [
 ]
 
 
-def find_log_root(root: Path) -> Path:
-    roots = []
-    for first_log in sorted(root.rglob(LOG_FILES[0])):
-        candidate = first_log.parent
-        if all((candidate / name).is_file() for name in LOG_FILES):
-            roots.append(candidate.resolve())
-
-    if len(roots) != 1:
-        print(
-            f"Expected exactly one directory containing the four required logs, found {len(roots)}.",
-            file=sys.stderr,
-        )
-        for path in roots:
-            print(f"  {path}", file=sys.stderr)
-        raise SystemExit(1)
-
-    return roots[0]
-
-
 def parse_exp_id(log_path: Path) -> str:
     text = log_path.read_text(encoding="utf-8", errors="replace")
     matches = re.findall(r"Begin pipeline,.*exp_id=([0-9]+)", text)
@@ -101,8 +82,15 @@ def main() -> None:
         print(f"Usage: {Path(sys.argv[0]).name}", file=sys.stderr)
         raise SystemExit(1)
 
-    root = Path.cwd()
-    log_root = find_log_root(root)
+    log_root = Path.cwd().resolve()
+    missing_logs = [name for name in LOG_FILES if not (log_root / name).is_file()]
+    if missing_logs:
+        print(f"Missing required logs in root directory: {log_root}", file=sys.stderr)
+        for name in missing_logs:
+            print(f"  {name}", file=sys.stderr)
+        raise SystemExit(1)
+
+    print(f"Using root/log directory: {log_root}", flush=True)
 
     for log_name in LOG_FILES:
         log_path = log_root / log_name
