@@ -4,8 +4,7 @@
             "PDFormer"
         ],
         "allowed_dataset": [
-            "PeMS04", "PeMS07", "PeMS08",
-            "NYCTaxi", "T-Drive", "CHIBike", "NYCTLC"
+            "NYCTLC"
         ],
         "PDFormer": {
             "dataset_class": "PDFormerDataset",
